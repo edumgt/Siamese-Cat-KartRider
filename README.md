@@ -1,5 +1,8 @@
 # Desk Racer
 
+<img width="1501" height="667" alt="image" src="https://github.com/user-attachments/assets/4b71da86-cfc8-4602-a791-ba0edea3542d" />
+
+
 A browser time-trial where a seal-point Siamese cat drives a 1:87 HO-scale kart around a miniature coaster built on a night-time desk. Three laps, a ghost of your best lap, and a diorama of real desk objects: a Logitech G915, an LG UltraGear, a boom mic, a key light, and a ginger cat figurine.
 
 The in-game title is **Siamese Cat Grand Prix**. The package name is `desk-racer`.

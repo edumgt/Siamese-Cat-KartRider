@@ -26,16 +26,37 @@
 
     <!-- Streamlined HUD Overlay -->
     <div id="hud-root">
-      <!-- Top Row: Clickable "Desk Racer" Title (Top-Left) & Lap Counter/Timer + Mute Icon (Top-Right) -->
+      <!-- Top Row: Clickable "Desk Racer" Title & Track Selector (Top-Left) & Lap Counter/Timer + Mute Icon (Top-Right) -->
       <header class="hud-top-bar">
         <div class="hud-top-left-stack">
-          <div
-            id="hud-brand-logo"
-            class="hud-brand-title"
-            role="button"
-            tabindex="0"
-            title="Click to open Controls &amp; Camera Menu"
-          >Desk Racer</div>
+          <div class="hud-brand-row">
+            <div
+              id="hud-brand-logo"
+              class="hud-brand-title"
+              role="button"
+              tabindex="0"
+              title="Click to open Controls &amp; Camera Menu"
+            >Desk Racer</div>
+            <!-- Interactive Track Quick Selector Button -->
+            <button
+              id="btn-hud-track-badge"
+              class="hud-track-badge"
+              type="button"
+              aria-label="Select Circuit / 코스 선택 (T)"
+              title="Select Circuit / 코스 선택 (T)"
+            >
+              <span id="hud-track-icon" class="track-badge-icon">🎢</span>
+              <span id="hud-track-name" class="track-badge-name">Classic Coaster</span>
+              <span class="track-badge-key">T</span>
+              <svg class="track-badge-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+          </div>
+          <div class="hud-sub-badge-row">
+            <div id="hud-pilot-chip" class="hud-pilot-chip" title="Driver: Siamese Cat (샴 고양이)">
+              <span class="pilot-dot"></span>
+              <span class="pilot-label">SIAMESE CAT PILOT 🐾</span>
+            </div>
+          </div>
         </div>
 
         <div class="hud-settings-anchor">
@@ -100,6 +121,52 @@
           <div class="welcome-eyebrow">SIAMESE CAT GRAND PRIX · 3 LAPS</div>
           <h1 id="welcome-title" class="welcome-title">DESK RACER</h1>
 
+          <!-- Circuit Selection Block -->
+          <div class="welcome-section-group">
+            <div class="welcome-control-label">SELECT CIRCUIT / 코스 선택 <kbd class="welcome-inline-kbd">T</kbd></div>
+            <div class="track-cards-grid" id="welcome-track-cards">
+              <div class="track-select-card active" data-track="classic" role="button" tabindex="0">
+                <div class="track-card-header">
+                  <span class="track-card-icon">🎢</span>
+                  <span class="track-badge-tag tag-cyan">ORIGINAL</span>
+                </div>
+                <div class="track-card-name">Classic Coaster</div>
+                <div class="track-card-kr">클래식 코스터</div>
+                <div class="track-card-stats">3.84m · 14 TURNS · 3D HELIX</div>
+              </div>
+
+              <div class="track-select-card" data-track="gymkhana" role="button" tabindex="0">
+                <div class="track-card-header">
+                  <span class="track-card-icon">⚡</span>
+                  <span class="track-badge-tag tag-gold">NEW DRIFT</span>
+                </div>
+                <div class="track-card-name">Desk Gymkhana</div>
+                <div class="track-card-kr">데스크 짐카나</div>
+                <div class="track-card-stats">2.95m · 18 TURNS · SURFACE</div>
+              </div>
+
+              <div class="track-select-card" data-track="infinity" role="button" tabindex="0">
+                <div class="track-card-header">
+                  <span class="track-card-icon">♾️</span>
+                  <span class="track-badge-tag tag-purple">3D FIGURE-8</span>
+                </div>
+                <div class="track-card-name">Sky Infinity Loop</div>
+                <div class="track-card-kr">스카이 인피니티</div>
+                <div class="track-card-stats">4.28m · 12 TURNS · FLYOVER</div>
+              </div>
+
+              <div class="track-select-card" data-track="countryside" role="button" tabindex="0">
+                <div class="track-card-header">
+                  <span class="track-card-icon">🌾</span>
+                  <span class="track-badge-tag tag-green">EASY 힐링</span>
+                </div>
+                <div class="track-card-name">Country Meadow</div>
+                <div class="track-card-kr">시골 들판길</div>
+                <div class="track-card-stats">3.32m · 10 TURNS · SCENIC</div>
+              </div>
+            </div>
+          </div>
+
           <div class="welcome-controls-grid">
             <!-- WASD Controls -->
             <div class="welcome-control-block">
@@ -116,7 +183,7 @@
                     <kbd class="welcome-key">A</kbd>
                     <kbd class="welcome-key">D</kbd>
                   </div>
-                  <span>STEER</span>
+                  <span>STEER / DRIFT</span>
                 </div>
                 <div class="control-key-row">
                   <div class="control-kbd-pair">
@@ -128,7 +195,7 @@
                   <div class="control-kbd-pair">
                     <kbd class="welcome-key welcome-key-cyan">G</kbd>
                   </div>
-                  <span>GHOST CAR (ON/OFF)</span>
+                  <span>GHOST CAR</span>
                 </div>
               </div>
             </div>
@@ -157,6 +224,29 @@
         </div>
       </div>
 
+      <!-- Dedicated Circuit Selection Modal (Toggled via 'T' or Track Badge) -->
+      <div id="track-dialog-overlay" class="welcome-dialog-overlay track-dialog-overlay hidden" role="dialog" aria-labelledby="track-modal-title">
+        <div class="welcome-dialog-card track-modal-card">
+          <div class="welcome-eyebrow">CIRCUIT SELECTION · 코스 선택</div>
+          <h2 id="track-modal-title" class="welcome-title track-modal-title">CHOOSE TRACK</h2>
+
+          <div class="track-modal-grid" id="track-modal-cards">
+            <!-- Rendered by JS or clicked directly -->
+          </div>
+
+          <div class="finish-actions-row track-modal-actions">
+            <button id="btn-track-confirm" class="welcome-start-btn finish-action-btn" type="button">
+              <span class="welcome-start-text">DRIVE TRACK</span>
+              <kbd class="welcome-enter-kbd">ENTER ↵</kbd>
+            </button>
+            <button id="btn-track-close" class="welcome-start-btn finish-action-btn finish-autopilot-btn" type="button">
+              <span class="welcome-start-text">CLOSE</span>
+              <kbd class="welcome-enter-kbd">ESC</kbd>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Center Formula 1 Countdown Number (Triggered by pressing Enter at Start) -->
       <div id="hud-f1-countdown" class="hud-f1-countdown hidden">5</div>
 
@@ -166,6 +256,11 @@
           <h2 id="hud-finish-title" class="hud-finish-title">FINISH</h2>
           <div id="hud-finish-time" class="hud-finish-time">00:00.00</div>
           <div id="hud-finish-sub" class="hud-finish-sub">BEST LAP 00:00.00</div>
+          <div id="hud-finish-track-info" class="hud-finish-track-info">
+            <span class="finish-track-icon" id="finish-track-icon">🎢</span>
+            <span class="finish-track-label">CIRCUIT:</span>
+            <span id="finish-track-name" class="finish-track-name">Classic Coaster</span>
+          </div>
           <div id="hud-finish-ghost" class="hud-finish-ghost hidden">
             <span class="finish-ghost-tag">GHOST</span>
             <span id="hud-finish-ghost-sub">NEW BEST LAP RECORD!</span>
@@ -174,6 +269,10 @@
             <button id="btn-finish-race-again" class="welcome-start-btn finish-action-btn" type="button">
               <span class="welcome-start-text">RACE AGAIN</span>
               <kbd class="welcome-enter-kbd">ENTER ↵</kbd>
+            </button>
+            <button id="btn-finish-change-track" class="welcome-start-btn finish-action-btn finish-change-track-btn" type="button">
+              <span class="welcome-start-text">SELECT TRACK</span>
+              <kbd class="welcome-enter-kbd">T</kbd>
             </button>
             <button id="btn-finish-autopilot" class="welcome-start-btn finish-action-btn finish-autopilot-btn" type="button">
               <span class="welcome-start-text">AUTO-PILOT</span>

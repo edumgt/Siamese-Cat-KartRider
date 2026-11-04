@@ -3,6 +3,7 @@ import {
   createAsphaltRoadTexture,
   createCheckeredGantryTexture,
 } from './ProceduralTextures.js';
+import { buildCountrysideScenery } from './CountrysideSceneryBuilder.js';
 
 let cachedSplineSamples = null;
 let cachedV4TrackTextures = null;
@@ -787,9 +788,10 @@ export function buildCoasterTrack(splineData) {
   const curbColors = [];
   const curbIndices = [];
 
-  const redColor = new THREE.Color(0xe8251a);
-  const whiteColor = new THREE.Color(0xf5f7fa);
-  const silverRailColor = new THREE.Color(0xb8c4d4);
+  const isCountryside = splineData && splineData.id === 'countryside';
+  const redColor = isCountryside ? new THREE.Color(0x2e7d32) : new THREE.Color(0xe8251a);
+  const whiteColor = isCountryside ? new THREE.Color(0xfbf8ee) : new THREE.Color(0xf5f7fa);
+  const silverRailColor = isCountryside ? new THREE.Color(0x6d4c41) : new THREE.Color(0xb8c4d4);
 
   let cVertOffset = 0;
   for (let i = 0; i < N; i++) {
@@ -1027,11 +1029,29 @@ export function buildCoasterTrack(splineData) {
   trackGroup.add(chordInstanced, footpadInstanced, saddleInstanced, ringInstanced);
 
   // -------------------------------------------------------------------------
-  // 5. START / FINISH GRAND PRIX PORTAL GANTRY IN SECTOR 6 ([0.000, 0.035, 0.255])
+  // 5. START / FINISH GRAND PRIX PORTAL GANTRY (Dynamic per-circuit start line)
   // -------------------------------------------------------------------------
+  const sfIdx =
+    splineData && splineData.start_finish_index !== undefined
+      ? splineData.start_finish_index % N
+      : Math.min(646, N - 1);
+  const sfSample = samples[sfIdx] || samples[0];
+  const sfPos = new THREE.Vector3(...sfSample.position);
+  const sfTan = new THREE.Vector3(...sfSample.tangent).normalize();
+  const sfNormal = new THREE.Vector3(...sfSample.normal).normalize();
+  const sfRight = new THREE.Vector3(...sfSample.right).normalize();
+
   const gantryGroup = new THREE.Group();
   gantryGroup.name = 'StartFinishGantry';
-  gantryGroup.position.set(0.0183, 0.035, 0.255);
+  gantryGroup.position.copy(sfPos);
+
+  // Align gantry coordinate frame: local X along -tangent, local Y along normal, local Z along -right
+  const gantryBasisMat = new THREE.Matrix4();
+  const gantryLocalX = sfTan.clone().negate();
+  const gantryLocalY = sfNormal.clone();
+  const gantryLocalZ = sfRight.clone().negate();
+  gantryBasisMat.makeBasis(gantryLocalX, gantryLocalY, gantryLocalZ);
+  gantryGroup.quaternion.setFromRotationMatrix(gantryBasisMat);
 
   // Overhead gantry truss towers on Z = -0.018 and Z = +0.018 (track runs East-to-West along X here)
   for (const gz of [-0.018, 0.018]) {
@@ -1470,7 +1490,7 @@ export function buildCoasterTrack(splineData) {
   });
 
   const f1StartLightPods = [];
-  const gSample = samples[646] || samples[0];
+  const gSample = samples[sfIdx] || samples[0];
   const gCenter = new THREE.Vector3(...gSample.position);
   const gRightHoriz = new THREE.Vector3(gSample.right[0], 0, gSample.right[2]).normalize();
   const gUpVec = new THREE.Vector3(0, 1, 0);
@@ -1553,6 +1573,11 @@ export function buildCoasterTrack(splineData) {
     );
   }
   trackGroup.add(debugGroup);
+
+  if (splineData && splineData.id === 'countryside') {
+    const countrysideScenery = buildCountrysideScenery(splineData);
+    trackGroup.add(countrysideScenery);
+  }
 
   return {
     trackGroup,

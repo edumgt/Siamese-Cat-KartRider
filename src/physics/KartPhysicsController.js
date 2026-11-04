@@ -41,12 +41,22 @@ export async function createKartPhysicsController(splineData, manifest, roadGeo)
   }
 
   // 3. Coaster Roadbed Trimesh Collider inside Rapier World
-  if (roadGeo && roadGeo.attributes.position && roadGeo.index) {
-    const verts = new Float32Array(roadGeo.attributes.position.array);
-    const indices = new Uint32Array(roadGeo.index.array);
-    const trackBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
-    world.createCollider(RAPIER.ColliderDesc.trimesh(verts, indices), trackBody);
+  let trackBody = null;
+  function updateTrackCollider(geo) {
+    if (trackBody) {
+      try {
+        world.removeRigidBody(trackBody);
+      } catch (_e) {}
+      trackBody = null;
+    }
+    if (geo && geo.attributes && geo.attributes.position && geo.index) {
+      const verts = new Float32Array(geo.attributes.position.array);
+      const indices = new Uint32Array(geo.index.array);
+      trackBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+      world.createCollider(RAPIER.ColliderDesc.trimesh(verts, indices), trackBody);
+    }
   }
+  updateTrackCollider(roadGeo);
 
   // 4. Kinematic Position-Based RigidBody for the 1:87 Micro-Kart (18mm x 12mm x 8mm)
   const kartBodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(
@@ -63,115 +73,133 @@ export async function createKartPhysicsController(splineData, manifest, roadGeo)
   // -------------------------------------------------------------------------
   // PRECOMPUTE PERIODIC SPLINE TABLE & SECTOR START ARC-LENGTHS
   // -------------------------------------------------------------------------
-  const samples = splineData.samples;
-  const N = samples.length;
-  const totalLength = splineData.total_length_m || 3.8371;
-
-  // C2 Position & Orientation Frame Smoothing:
-  // track_spline.json has 18-sample Catmull-Rom knot boundaries in Sector 2 (Cat Helix) and Sector 4 (Lamp Corkscrew)
-  // where adjacent tangents jump by up to 8.3°–10.1° across a single 3.1mm segment.
-  // A 2-pass [0.2, 0.6, 0.2] position filter + 4-pass circular [1, 2, 3, 2, 1]/9 frame filter removes knot kinks
-  // so position and tangent are 100% C2-consistent.
-  const smoothPositions = samples.map((s) => new THREE.Vector3().fromArray(s.position));
-  for (let pass = 0; pass < 2; pass++) {
-    const nextP = smoothPositions.map((v) => v.clone());
-    for (let i = 0; i < N; i++) {
-      const pPrev = smoothPositions[(i - 1 + N) % N];
-      const pCurr = smoothPositions[i];
-      const pNext = smoothPositions[(i + 1) % N];
-      nextP[i]
-        .copy(pCurr)
-        .multiplyScalar(0.6)
-        .addScaledVector(pPrev, 0.2)
-        .addScaledVector(pNext, 0.2);
-    }
-    for (let i = 0; i < N; i++) {
-      smoothPositions[i].copy(nextP[i]);
-    }
-  }
-
-  const smoothTangents = samples.map((s) => new THREE.Vector3().fromArray(s.tangent).normalize());
-  const smoothNormals = samples.map((s) => new THREE.Vector3().fromArray(s.normal).normalize());
-  const smoothRights = samples.map((s) => new THREE.Vector3().fromArray(s.right).normalize());
-  const smoothBanks = samples.map((s) => s.bank_deg || 0);
-
-  for (let pass = 0; pass < 4; pass++) {
-    const nextT = smoothTangents.map((v) => v.clone());
-    const nextN = smoothNormals.map((v) => v.clone());
-    const nextB = smoothBanks.slice();
-    const weights = [1, 2, 3, 2, 1];
-    for (let i = 0; i < N; i++) {
-      nextT[i].set(0, 0, 0);
-      nextN[i].set(0, 0, 0);
-      let bSum = 0;
-      for (let k = -2; k <= 2; k++) {
-        const idx = (i + k + N) % N;
-        const w = weights[k + 2];
-        nextT[i].addScaledVector(smoothTangents[idx], w);
-        nextN[i].addScaledVector(smoothNormals[idx], w);
-        bSum += smoothBanks[idx] * w;
-      }
-      nextT[i].normalize();
-      nextN[i].normalize();
-      nextB[i] = bSum / 9.0;
-    }
-    for (let i = 0; i < N; i++) {
-      smoothTangents[i].copy(nextT[i]);
-      // Re-orthonormalize right = tangent x normal, normal = right x tangent
-      smoothRights[i].crossVectors(smoothTangents[i], nextN[i]).normalize();
-      smoothNormals[i].crossVectors(smoothRights[i], smoothTangents[i]).normalize();
-      smoothBanks[i] = nextB[i];
-    }
-  }
-
-  // Precompute continuous per-sample signed horizontal curvature (smoothed across knots so Autopilot never chatters at 45Hz)
-  const rawCurvatures = new Float32Array(N);
-  const smoothCurvatures = new Float32Array(N);
-  const _tmpDiff = new THREE.Vector3();
-  for (let i = 0; i < N; i++) {
-    const iPrev = (i - 3 + N) % N;
-    const iNext = (i + 3) % N;
-    _tmpDiff.subVectors(smoothTangents[iNext], smoothTangents[iPrev]);
-    rawCurvatures[i] = _tmpDiff.dot(smoothRights[i]) * 8.0;
-  }
-  for (let i = 0; i < N; i++) {
-    let cSum = 0;
-    const weights = [1, 2, 3, 2, 1];
-    for (let k = -2; k <= 2; k++) {
-      cSum += rawCurvatures[(i + k + N) % N] * weights[k + 2];
-    }
-    smoothCurvatures[i] = cSum / 9.0;
-  }
-
-  // Anchor the main Start/Finish Line to sample 646 (X = +0.0183m, Z = 0.255m,
-  // where the F1 5-light countdown gantry and 645..646 black-and-white
-  // checkered road stripes are located)
-  let startFinishIdx = Math.min(646, N - 1);
-  let minFinishDist = Infinity;
+  let samples = splineData.samples;
+  let N = samples.length;
+  let totalLength = splineData.total_length_m || 3.8371;
+  let smoothPositions = [];
+  let smoothTangents = [];
+  let smoothNormals = [];
+  let smoothRights = [];
+  let smoothBanks = [];
+  let smoothCurvatures = new Float32Array(0);
+  let startFinishIdx = 0;
+  let startFinishArc = 0.0;
   const sectorStartArcs = {};
 
-  for (let i = 0; i < N; i++) {
-    const s = samples[i];
-    if (sectorStartArcs[s.sector] === undefined) {
-      sectorStartArcs[s.sector] = s.arc_length_m;
-    }
-    if (s.sector === 6) {
-      const dx = s.position[0] - 0.0183;
-      const dz = s.position[2] - 0.255;
-      const d2 = dx * dx + dz * dz;
-      if (d2 < minFinishDist) {
-        minFinishDist = d2;
-        startFinishIdx = i;
+  function computeSplineTables(sData) {
+    samples = sData.samples;
+    N = samples.length;
+    totalLength = sData.total_length_m || 3.8371;
+
+    // C2 Position & Orientation Frame Smoothing:
+    // A 2-pass [0.2, 0.6, 0.2] position filter + 4-pass circular [1, 2, 3, 2, 1]/9 frame filter removes knot kinks
+    smoothPositions = samples.map((s) => new THREE.Vector3().fromArray(s.position));
+    for (let pass = 0; pass < 2; pass++) {
+      const nextP = smoothPositions.map((v) => v.clone());
+      for (let i = 0; i < N; i++) {
+        const pPrev = smoothPositions[(i - 1 + N) % N];
+        const pCurr = smoothPositions[i];
+        const pNext = smoothPositions[(i + 1) % N];
+        nextP[i]
+          .copy(pCurr)
+          .multiplyScalar(0.6)
+          .addScaledVector(pPrev, 0.2)
+          .addScaledVector(pNext, 0.2);
+      }
+      for (let i = 0; i < N; i++) {
+        smoothPositions[i].copy(nextP[i]);
       }
     }
+
+    smoothTangents = samples.map((s) => new THREE.Vector3().fromArray(s.tangent).normalize());
+    smoothNormals = samples.map((s) => new THREE.Vector3().fromArray(s.normal).normalize());
+    smoothRights = samples.map((s) => new THREE.Vector3().fromArray(s.right).normalize());
+    smoothBanks = samples.map((s) => s.bank_deg || 0);
+
+    for (let pass = 0; pass < 4; pass++) {
+      const nextT = smoothTangents.map((v) => v.clone());
+      const nextN = smoothNormals.map((v) => v.clone());
+      const nextB = smoothBanks.slice();
+      const weights = [1, 2, 3, 2, 1];
+      for (let i = 0; i < N; i++) {
+        nextT[i].set(0, 0, 0);
+        nextN[i].set(0, 0, 0);
+        let bSum = 0;
+        for (let k = -2; k <= 2; k++) {
+          const idx = (i + k + N) % N;
+          const w = weights[k + 2];
+          nextT[i].addScaledVector(smoothTangents[idx], w);
+          nextN[i].addScaledVector(smoothNormals[idx], w);
+          bSum += smoothBanks[idx] * w;
+        }
+        nextT[i].normalize();
+        nextN[i].normalize();
+        nextB[i] = bSum / 9.0;
+      }
+      for (let i = 0; i < N; i++) {
+        smoothTangents[i].copy(nextT[i]);
+        smoothRights[i].crossVectors(smoothTangents[i], nextN[i]).normalize();
+        smoothNormals[i].crossVectors(smoothRights[i], smoothTangents[i]).normalize();
+        smoothBanks[i] = nextB[i];
+      }
+    }
+
+    // Precompute continuous per-sample signed horizontal curvature
+    const rawCurvatures = new Float32Array(N);
+    smoothCurvatures = new Float32Array(N);
+    const _tmpDiff = new THREE.Vector3();
+    for (let i = 0; i < N; i++) {
+      const iPrev = (i - 3 + N) % N;
+      const iNext = (i + 3) % N;
+      _tmpDiff.subVectors(smoothTangents[iNext], smoothTangents[iPrev]);
+      rawCurvatures[i] = _tmpDiff.dot(smoothRights[i]) * 8.0;
+    }
+    for (let i = 0; i < N; i++) {
+      let cSum = 0;
+      const weights = [1, 2, 3, 2, 1];
+      for (let k = -2; k <= 2; k++) {
+        cSum += rawCurvatures[(i + k + N) % N] * weights[k + 2];
+      }
+      smoothCurvatures[i] = cSum / 9.0;
+    }
+
+    // Anchor Start/Finish line
+    for (const key of Object.keys(sectorStartArcs)) {
+      delete sectorStartArcs[key];
+    }
+    startFinishIdx = 0;
+
+    if (sData.start_finish_index !== undefined) {
+      startFinishIdx = Math.min(sData.start_finish_index, N - 1);
+    } else {
+      let minFinishDist = Infinity;
+      for (let i = 0; i < N; i++) {
+        const s = samples[i];
+        if (s.sector === 6) {
+          const dx = s.position[0] - 0.0183;
+          const dz = s.position[2] - 0.255;
+          const d2 = dx * dx + dz * dz;
+          if (d2 < minFinishDist) {
+            minFinishDist = d2;
+            startFinishIdx = i;
+          }
+        }
+      }
+    }
+
+    for (let i = 0; i < N; i++) {
+      const s = samples[i];
+      if (sectorStartArcs[s.sector] === undefined) {
+        sectorStartArcs[s.sector] = s.arc_length_m;
+      }
+    }
+
+    startFinishArc = samples[startFinishIdx].arc_length_m;
+    const startSector = sData.start_sector || samples[startFinishIdx].sector || 6;
+    sectorStartArcs[startSector] = (startFinishArc - 0.025 + totalLength) % totalLength;
   }
 
-  const startFinishArc = samples[startFinishIdx].arc_length_m;
-  // Position the kart on the starting grid right behind the black-and-white
-  // checkered stripes (645..646, entry edge at startFinishArc - 0.0095m) so the
-  // car starts close to the stripes while keeping the overhead F1 5-light
-  // countdown gantry in clear view.
-  sectorStartArcs[6] = (startFinishArc - 0.025 + totalLength) % totalLength;
+  computeSplineTables(splineData);
 
   // Pre-allocated scratch vectors/matrices to avoid GC allocations on every physics step
   const _p1 = new THREE.Vector3();
@@ -423,7 +451,8 @@ export async function createKartPhysicsController(splineData, manifest, roadGeo)
   }
 
   function teleportToSector(sectorNum) {
-    const targetArc = sectorStartArcs[sectorNum] ?? sectorStartArcs[6] ?? 0.0;
+    const fallbackArc = (startFinishArc - 0.025 + totalLength) % totalLength;
+    const targetArc = sectorStartArcs[sectorNum] !== undefined ? sectorStartArcs[sectorNum] : fallbackArc;
     state.s = targetArc;
     state.lateralOffset = 0.0;
     state.lateralVel = 0.0;
@@ -465,7 +494,17 @@ export async function createKartPhysicsController(splineData, manifest, roadGeo)
     state.railHitCooldown = 0.0;
     state.angledIntoRail = false;
     state.steeringAway = false;
-    teleportToSector(6);
+    const curStartSector = samples[startFinishIdx] ? samples[startFinishIdx].sector : 6;
+    teleportToSector(curStartSector);
+  }
+
+  function setTrackSpline(newSplineData, newRoadGeo) {
+    if (!newSplineData || !newSplineData.samples) return;
+    computeSplineTables(newSplineData);
+    if (newRoadGeo) {
+      updateTrackCollider(newRoadGeo);
+    }
+    resetToStart();
   }
 
   function notifyLightsOut() {
@@ -1117,6 +1156,7 @@ export async function createKartPhysicsController(splineData, manifest, roadGeo)
     sampleTrackAtArcLength,
     teleportToSector,
     resetToStart,
+    setTrackSpline,
     setAutopilot,
     setTouchKey,
     clearTouchKeys,

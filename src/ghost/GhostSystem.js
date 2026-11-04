@@ -1,10 +1,15 @@
 import * as THREE from 'three';
 
-const GHOST_STORAGE_KEY = 'desk_racer_ghost_v1';
+function getStorageKey(trackId) {
+  return `desk_racer_ghost_${trackId || 'classic'}`;
+}
+
 const RECORD_INTERVAL_SEC = 1 / 30; // 30Hz keyframe recording (interpolated at 60/120Hz for buttery smooth playback)
 
-export function createGhostSystem(ghostKart, totalTrackLength = 3.8371) {
+export function createGhostSystem(ghostKart, initialTrackLength = 3.8371, initialTrackId = 'classic') {
   let isGhostEnabled = true;
+  let activeTrackId = initialTrackId;
+  let totalTrackLength = initialTrackLength;
   let bestLapData = null; // { lapTime: number, frames: Array<{ t, p, q, s, v, d }> }
   let currentLapFrames = [];
   let lastRecordTime = -1;
@@ -24,32 +29,54 @@ export function createGhostSystem(ghostKart, totalTrackLength = 3.8371) {
 
   let onRecordChangeCallback = null;
 
-  // 1. Load saved ghost from localStorage
-  try {
-    const raw = localStorage.getItem(GHOST_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (
-        parsed &&
-        typeof parsed.lapTime === 'number' &&
-        parsed.lapTime > 2.0 &&
-        Array.isArray(parsed.frames) &&
-        parsed.frames.length > 10
-      ) {
-        bestLapData = parsed;
+  function loadGhostFromStorage(trackId) {
+    bestLapData = null;
+    try {
+      const raw = localStorage.getItem(getStorageKey(trackId));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (
+          parsed &&
+          typeof parsed.lapTime === 'number' &&
+          parsed.lapTime > 2.0 &&
+          Array.isArray(parsed.frames) &&
+          parsed.frames.length > 10
+        ) {
+          bestLapData = parsed;
+        }
       }
+    } catch (err) {
+      console.warn('Failed to load ghost lap from localStorage:', err);
     }
-  } catch (err) {
-    console.warn('Failed to load ghost lap from localStorage:', err);
+    if (onRecordChangeCallback) {
+      onRecordChangeCallback(bestLapData ? bestLapData.lapTime : null);
+    }
   }
+
+  // Initial load
+  loadGhostFromStorage(activeTrackId);
 
   function saveGhostToStorage() {
     if (!bestLapData) return;
     try {
-      localStorage.setItem(GHOST_STORAGE_KEY, JSON.stringify(bestLapData));
+      localStorage.setItem(getStorageKey(activeTrackId), JSON.stringify(bestLapData));
     } catch (err) {
       console.warn('Failed to save ghost lap to localStorage:', err);
     }
+  }
+
+  function setTrack(newTrackId, newTotalLength) {
+    activeTrackId = newTrackId;
+    if (newTotalLength) {
+      totalTrackLength = newTotalLength;
+    }
+    currentLapFrames = [];
+    currentGhostPose = null;
+    currentDeltaSec = null;
+    ghostFinishedThisLap = false;
+    ghostKart.setVisible(false);
+    loadGhostFromStorage(activeTrackId);
+    return bestLapData ? bestLapData.lapTime : null;
   }
 
   function clearGhostRecord() {
@@ -58,7 +85,7 @@ export function createGhostSystem(ghostKart, totalTrackLength = 3.8371) {
     currentGhostPose = null;
     currentDeltaSec = null;
     try {
-      localStorage.removeItem(GHOST_STORAGE_KEY);
+      localStorage.removeItem(getStorageKey(activeTrackId));
     } catch (_e) {}
     ghostKart.setVisible(false);
     if (onRecordChangeCallback) {
@@ -308,6 +335,7 @@ export function createGhostSystem(ghostKart, totalTrackLength = 3.8371) {
     toggleGhostEnabled,
     getBestLapTime,
     hasGhost,
+    setTrack,
     get isEnabled() {
       return isGhostEnabled;
     },

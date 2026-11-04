@@ -1419,3 +1419,394 @@ body {
   }
 }
 
+/* =========================================================================
+   CIRCUIT / TRACK SELECTION SYSTEM & SIAMESE CAT PILOT BADGES
+   ========================================================================= */
+
+.hud-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.hud-track-badge {
+  pointer-events: auto;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  background: rgba(6, 12, 24, 0.82);
+  border: 1.5px solid rgba(0, 229, 255, 0.42);
+  border-radius: 6px;
+  color: #c8f5ff;
+  font-family: 'Orbitron', sans-serif;
+  font-style: italic;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  transform: skewX(-10deg);
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.85),
+    0 0 14px rgba(0, 229, 255, 0.18);
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hud-track-badge > * {
+  transform: skewX(10deg);
+}
+
+.hud-track-badge:hover {
+  border-color: #00e5ff;
+  color: #ffffff;
+  background: rgba(10, 22, 44, 0.92);
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.90),
+    0 0 20px rgba(0, 229, 255, 0.45);
+}
+
+.track-badge-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.track-badge-key {
+  font-family: 'JetBrains Mono', monospace;
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 4px;
+  background: rgba(0, 229, 255, 0.22);
+  border: 1px solid rgba(0, 229, 255, 0.55);
+  border-radius: 3px;
+  color: #00e5ff;
+}
+
+.track-badge-arrow {
+  width: 12px;
+  height: 12px;
+  opacity: 0.75;
+  transition: transform 0.15s ease;
+}
+
+.hud-track-badge:hover .track-badge-arrow {
+  opacity: 1;
+  transform: skewX(10deg) translateY(1px);
+}
+
+.hud-sub-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hud-pilot-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  background: rgba(255, 170, 68, 0.12);
+  border: 1px solid rgba(255, 170, 68, 0.38);
+  border-radius: 999px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #ffd27d;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
+}
+
+.pilot-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffaa44;
+  box-shadow: 0 0 8px #ffaa44;
+  animation: pilotPulse 2.4s infinite ease-in-out;
+}
+
+@keyframes pilotPulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+/* Circuit Selector inside Welcome Dialog */
+.welcome-track-selector-section {
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.welcome-inline-kbd {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 5px;
+  background: rgba(0, 229, 255, 0.18);
+  border: 1px solid rgba(0, 229, 255, 0.55);
+  border-radius: 3px;
+  color: #00e5ff;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.track-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+@media (max-width: 680px) {
+  .track-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.track-select-card {
+  pointer-events: auto;
+  cursor: pointer;
+  background: rgba(8, 14, 28, 0.72);
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 10px 11px;
+  text-align: left;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.track-select-card:hover {
+  background: rgba(14, 24, 46, 0.88);
+  border-color: rgba(0, 229, 255, 0.65);
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.85);
+}
+
+.track-select-card.active {
+  background: linear-gradient(145deg, rgba(0, 229, 255, 0.18) 0%, rgba(8, 18, 38, 0.92) 100%);
+  border-color: #00e5ff;
+  box-shadow:
+    0 0 20px rgba(0, 229, 255, 0.32),
+    0 8px 24px rgba(0, 0, 0, 0.90),
+    inset 0 0 12px rgba(0, 229, 255, 0.12);
+}
+
+.track-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.track-card-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.track-badge-tag {
+  font-family: 'Orbitron', sans-serif;
+  font-style: italic;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 1.5px 5px;
+  border-radius: 3px;
+}
+
+.tag-cyan {
+  background: rgba(0, 229, 255, 0.20);
+  border: 1px solid rgba(0, 229, 255, 0.55);
+  color: #00e5ff;
+}
+
+.tag-gold {
+  background: rgba(255, 170, 68, 0.22);
+  border: 1px solid rgba(255, 170, 68, 0.65);
+  color: #ffd27d;
+}
+
+.tag-purple {
+  background: rgba(168, 85, 247, 0.22);
+  border: 1px solid rgba(168, 85, 247, 0.65);
+  color: #d8b4fe;
+}
+
+.tag-green {
+  background: rgba(34, 197, 94, 0.22);
+  border: 1px solid rgba(34, 197, 94, 0.65);
+  color: #86efac;
+}
+
+.track-card-name {
+  font-family: 'Orbitron', sans-serif;
+  font-style: italic;
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.track-card-kr {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(200, 225, 255, 0.65);
+  margin-top: 1px;
+}
+
+.track-card-stats {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgba(150, 220, 255, 0.85);
+  margin-top: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Dedicated Circuit Selection Modal Overlay */
+.track-dialog-overlay {
+  z-index: 64;
+}
+
+.track-modal-card {
+  width: min(620px, 92vw);
+  padding: 30px 34px 26px;
+}
+
+.track-modal-title {
+  margin-bottom: 20px;
+}
+
+.track-modal-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  margin-bottom: 24px;
+}
+
+.track-modal-item {
+  pointer-events: auto;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 18px;
+  background: rgba(8, 14, 28, 0.76);
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  border-radius: 9px;
+  text-align: left;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.track-modal-item:hover {
+  background: rgba(14, 24, 48, 0.90);
+  border-color: rgba(0, 229, 255, 0.65);
+  transform: translateX(3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.85);
+}
+
+.track-modal-item.active {
+  background: linear-gradient(135deg, rgba(0, 229, 255, 0.16) 0%, rgba(10, 22, 44, 0.92) 100%);
+  border-color: #00e5ff;
+  box-shadow:
+    0 0 22px rgba(0, 229, 255, 0.35),
+    0 8px 26px rgba(0, 0, 0, 0.90);
+}
+
+.track-item-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.track-item-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.track-item-title-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.track-item-name {
+  font-family: 'Orbitron', sans-serif;
+  font-style: italic;
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.04em;
+}
+
+.track-item-desc {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: rgba(190, 220, 245, 0.70);
+  margin-top: 2px;
+}
+
+.track-item-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.track-item-best {
+  font-family: 'Orbitron', sans-serif;
+  font-style: italic;
+  font-size: 13px;
+  font-weight: 800;
+  color: #00e5ff;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 10px rgba(0, 229, 255, 0.6);
+}
+
+.track-item-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.finish-change-track-btn {
+  background: linear-gradient(95deg, rgba(0, 229, 255, 0.24) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border-color: rgba(0, 229, 255, 0.75);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.88),
+    0 0 18px rgba(0, 229, 255, 0.25);
+}
+
+.finish-change-track-btn:hover {
+  background: linear-gradient(95deg, rgba(0, 229, 255, 0.42) 0%, rgba(255, 255, 255, 0.20) 100%);
+  border-color: #00e5ff;
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.92),
+    0 0 28px rgba(0, 229, 255, 0.55);
+}
+
+.hud-finish-track-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: -12px;
+  margin-bottom: 16px;
+  font-family: 'Orbitron', sans-serif;
+  font-style: italic;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #d4f8ff;
+}
+
+.finish-track-name {
+  color: #00e5ff;
+  text-shadow: 0 0 12px rgba(0, 229, 255, 0.65);
+}

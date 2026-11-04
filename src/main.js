@@ -19,6 +19,11 @@ import { buildRoomEnvironment } from './scene/RoomEnvironmentBuilder.js';
 import { createKartPhysicsController } from './physics/KartPhysicsController.js';
 import { createWebAudioSynth } from './audio/WebAudioSynth.js';
 import { createGhostSystem } from './ghost/GhostSystem.js';
+import {
+  TRACK_DEFINITIONS,
+  getTrackSplineData,
+  getTrackDefinition,
+} from './scene/TrackRegistry.js';
 
 async function initApp() {
   const container = document.getElementById('canvas-container');
@@ -216,7 +221,13 @@ async function initApp() {
     fetch('/assets/data/track_spline.json'),
   ]);
   const manifest = await manifestRes.json();
-  const splineData = await splineRes.json();
+  const classicSplineData = await splineRes.json();
+
+  let activeTrackId = localStorage.getItem('desk_racer_active_track') || 'classic';
+  if (!TRACK_DEFINITIONS.some((t) => t.id === activeTrackId)) {
+    activeTrackId = 'classic';
+  }
+  let splineData = getTrackSplineData(activeTrackId, classicSplineData);
 
   // Sector lookup map
   const sectorNames = {};
@@ -252,7 +263,7 @@ async function initApp() {
   const roomEnv = buildRoomEnvironment(scene, settings);
   scene.add(roomEnv.roomRoot);
 
-  const coaster = buildCoasterTrack(splineData);
+  let coaster = buildCoasterTrack(splineData);
   scene.add(coaster.trackGroup);
   if (coaster.underTrackLedGroup) {
     scene.add(coaster.underTrackLedGroup);
@@ -267,7 +278,8 @@ async function initApp() {
   ghostKart.ghostRoot.scale.setScalar(0.38);
   scene.add(ghostKart.ghostRoot);
 
-  const ghostSystem = createGhostSystem(ghostKart, splineData.total_length_m || 3.8371);
+  const ghostSystem = createGhostSystem(ghostKart, splineData.total_length_m || 3.8371, activeTrackId);
+  let trackGlbScene = null;
 
   // Dedicated post-Bokeh scene for 3D Drift & Boost Sparks so airborne sparks
   // flying off the edge of the track in front of distant background walls use
@@ -741,11 +753,12 @@ async function initApp() {
       glbContainerGroup.add(glbScene);
     });
     tryLoadGlbAsset('track_coaster.glb', 'track', (glbScene) => {
+      trackGlbScene = glbScene;
       if (coaster.calibrateTrackCoasterGlb) {
         coaster.calibrateTrackCoasterGlb(glbScene);
       }
-      coaster.trackGroup.visible = false;
-      disposeGroupGeometries(coaster.trackGroup);
+      glbScene.visible = activeTrackId === 'classic';
+      coaster.trackGroup.visible = activeTrackId !== 'classic';
       glbContainerGroup.add(glbScene);
     });
     tryLoadGlbAsset('kart_1to87.glb', 'kart', (glbScene) => {
@@ -1731,7 +1744,8 @@ async function initApp() {
   let mapMinimapX = (x, _y, _z) => x;
   let mapMinimapY = (_x, _y, z) => z;
 
-  if (radarCanvas) {
+  function initMinimapCanvas(sData) {
+    if (!radarCanvas) return;
     radarBgCanvas = document.createElement('canvas');
     radarBgCanvas.width = radarCanvas.width;
     radarBgCanvas.height = radarCanvas.height;
@@ -1739,7 +1753,7 @@ async function initApp() {
     const w = radarBgCanvas.width;
     const h = radarBgCanvas.height;
 
-    const pts = splineData.samples;
+    const pts = sData.samples;
     const nPts = pts.length;
     let minPX = Infinity;
     let maxPX = -Infinity;
@@ -1765,8 +1779,7 @@ async function initApp() {
     mapMinimapX = (x, y, z) => projMinimapRawX(x, y, z) * scale + offsetX;
     mapMinimapY = (x, y, z) => projMinimapRawY(x, y, z) * scale + offsetY;
 
-    // Precompute 2D projected vertices for smooth quadratic Bezier curve
-    // fitting
+    // Precompute 2D projected vertices for smooth quadratic Bezier curve fitting
     const p2d = new Array(nPts);
     for (let i = 0; i < nPts; i++) {
       const pos = pts[i].position;
@@ -1808,12 +1821,6 @@ async function initApp() {
     bgCtx.restore();
 
     // 2. Multi-Tier Elevation-Sorted 3D Extruded Ribbon Rendering
-    // (Bottom-to-Top Painter's Algorithm) Each elevation tier draws:
-    //  (a) a dark bridge-shadow outer casing (19.0px),
-    //  (b) a 3D extruded cool-slate underside rim (+4.2px downward offset) to
-    //  give physical coaster depth, (c) a thick, smooth top ribbon (12.0px)
-    //  shaded from cool silver-white at desk level (#cdd8e8)
-    //      to pure bright white (#ffffff) at the highest spiral peaks!
     const elevTiers = [
       {min: -1.0, max: 0.042, shade: '#cdd8e8', side: '#52637a'},
       {min: 0.036, max: 0.068, shade: '#d8e2f0', side: '#5c6e87'},
@@ -1868,8 +1875,7 @@ async function initApp() {
     traceSmoothClosedPath(bgCtx, p2d, 0.0);
     bgCtx.stroke();
 
-    // Paint elevated tiers from lowest to highest so each upper spiral turn
-    // bridges cleanly over lower turns
+    // Paint elevated tiers from lowest to highest
     for (let t = 1; t < elevTiers.length; t++) {
       const tier = elevTiers[t];
       strokeElevationTier(tier.min, tier.max, 'rgba(0, 0, 0, 0.86)', 19.4, 2.2);
@@ -1877,6 +1883,8 @@ async function initApp() {
       strokeElevationTier(tier.min, tier.max, tier.shade, 12.0, 0.0);
     }
   }
+
+  initMinimapCanvas(splineData);
 
   function drawMinimapRadar(st) {
     if (!radarCtx || !radarCanvas) return;
@@ -2031,6 +2039,11 @@ async function initApp() {
       const bestVal = bestLap != null ? bestLap : (totalTime || 0) / 3;
       elFinishSub.textContent = `BEST LAP ${formatLapTimerMMSSCC(bestVal)}`;
     }
+    const curDef = getTrackDefinition(activeTrackId);
+    const finishTrackNameEl = document.getElementById('finish-track-name');
+    const finishTrackIconEl = document.getElementById('finish-track-icon');
+    if (finishTrackNameEl) finishTrackNameEl.textContent = `${curDef.name} (${curDef.nameKr})`;
+    if (finishTrackIconEl) finishTrackIconEl.textContent = curDef.icon;
     if (elFinishGhost) {
       if (ghostRes && ghostRes.isNewRecord) {
         elFinishGhost.classList.remove('hidden');
@@ -2469,6 +2482,199 @@ async function initApp() {
     });
   }
 
+  // -------------------------------------------------------------------------
+  // MULTI-CIRCUIT TRACK SELECTOR & GHOST NAMESPACING
+  // -------------------------------------------------------------------------
+  const btnHudTrackBadge = document.getElementById('btn-hud-track-badge');
+  const hudTrackIconEl = document.getElementById('hud-track-icon');
+  const hudTrackNameEl = document.getElementById('hud-track-name');
+  const elTrackDialogOverlay = document.getElementById('track-dialog-overlay');
+  const trackModalCardsEl = document.getElementById('track-modal-cards');
+  const btnTrackClose = document.getElementById('btn-track-close');
+  const btnTrackConfirm = document.getElementById('btn-track-confirm');
+  const btnFinishChangeTrack = document.getElementById('btn-finish-change-track');
+  const finishTrackIconEl = document.getElementById('finish-track-icon');
+  const finishTrackNameEl = document.getElementById('finish-track-name');
+
+  function updateTrackUiElements(def, bestLap) {
+    if (hudTrackIconEl) hudTrackIconEl.textContent = def.icon;
+    if (hudTrackNameEl) hudTrackNameEl.textContent = def.name;
+    if (finishTrackIconEl) finishTrackIconEl.textContent = def.icon;
+    if (finishTrackNameEl) finishTrackNameEl.textContent = `${def.name} (${def.nameKr})`;
+
+    // Sync Welcome dialog track selection cards
+    document.querySelectorAll('#welcome-track-cards .track-select-card').forEach((card) => {
+      const isSel = card.dataset.track === activeTrackId;
+      card.classList.toggle('active', isSel);
+    });
+
+    // Sync dedicated modal items
+    document.querySelectorAll('.track-modal-item').forEach((item) => {
+      const isSel = item.dataset.track === activeTrackId;
+      item.classList.toggle('active', isSel);
+    });
+
+    // Update Ghost HUD time
+    if (elGhostTime) {
+      elGhostTime.textContent = bestLap != null ? formatLapTimerMMSSCC(bestLap) : '--:--.--';
+    }
+    if (elGhostDelta) {
+      elGhostDelta.classList.add('hidden');
+    }
+  }
+
+  function renderTrackModalCards() {
+    if (!trackModalCardsEl) return;
+    trackModalCardsEl.innerHTML = '';
+    for (const def of TRACK_DEFINITIONS) {
+      const isAct = def.id === activeTrackId;
+      let recordTimeStr = '--:--.--';
+      try {
+        const raw = localStorage.getItem(`desk_racer_ghost_${def.id}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed.lapTime === 'number') {
+            recordTimeStr = formatLapTimerMMSSCC(parsed.lapTime);
+          }
+        }
+      } catch (_e) {}
+
+      const item = document.createElement('div');
+      item.className = `track-modal-item ${isAct ? 'active' : ''}`;
+      item.dataset.track = def.id;
+      item.setAttribute('role', 'button');
+      item.setAttribute('tabindex', '0');
+      item.innerHTML = `
+        <div class="track-item-left">
+          <span class="track-item-icon">${def.icon}</span>
+          <div class="track-item-title-col">
+            <span class="track-item-name">${def.name} <span class="track-card-kr">(${def.nameKr})</span></span>
+            <span class="track-item-desc">${def.descriptionKr}</span>
+          </div>
+        </div>
+        <div class="track-item-right">
+          <span class="track-item-best" title="Best Ghost Lap Record">🏆 ${recordTimeStr}</span>
+          <span class="track-item-meta">${def.lengthM}m · ${def.turns} TURNS · ${def.difficulty}</span>
+        </div>
+      `;
+      item.addEventListener('click', () => {
+        switchTrack(def.id);
+        renderTrackModalCards();
+      });
+      trackModalCardsEl.appendChild(item);
+    }
+  }
+
+  function openTrackModal() {
+    hideWelcomeDialog();
+    hideFinishOverlay();
+    hideLapSplit();
+    cancelF1StartCountdown();
+    renderTrackModalCards();
+    if (elTrackDialogOverlay) {
+      elTrackDialogOverlay.classList.remove('hidden');
+    }
+  }
+
+  function closeTrackModal() {
+    if (elTrackDialogOverlay) {
+      elTrackDialogOverlay.classList.add('hidden');
+    }
+  }
+
+  function switchTrack(newTrackId) {
+    if (!TRACK_DEFINITIONS.some((t) => t.id === newTrackId)) {
+      newTrackId = 'classic';
+    }
+    activeTrackId = newTrackId;
+    try {
+      localStorage.setItem('desk_racer_active_track', newTrackId);
+    } catch (_e) {}
+
+    const curDef = getTrackDefinition(newTrackId);
+    const newSplineData = getTrackSplineData(newTrackId, classicSplineData);
+    splineData = newSplineData;
+
+    // Toggle track GLB if loaded
+    if (trackGlbScene) {
+      trackGlbScene.visible = activeTrackId === 'classic';
+    }
+
+    // Rebuild procedural coaster track
+    if (coaster) {
+      if (coaster.trackGroup) scene.remove(coaster.trackGroup);
+      if (coaster.underTrackLedGroup) scene.remove(coaster.underTrackLedGroup);
+      if (coaster.debugGroup) scene.remove(coaster.debugGroup);
+      disposeGroupGeometries(coaster.trackGroup);
+      disposeGroupGeometries(coaster.underTrackLedGroup);
+    }
+
+    coaster = buildCoasterTrack(newSplineData);
+    if (activeTrackId === 'classic' && loadedGlbStatus.track && trackGlbScene) {
+      coaster.trackGroup.visible = false;
+    } else {
+      coaster.trackGroup.visible = true;
+    }
+    scene.add(coaster.trackGroup);
+    if (coaster.underTrackLedGroup) {
+      scene.add(coaster.underTrackLedGroup);
+      coaster.updateUnderTrackLed(clock.getElapsedTime(), settings.trackGlowIntensity ?? 1.0);
+    }
+    scene.add(coaster.debugGroup);
+
+    // Update Rapier world and vehicle spline solver
+    physics.setTrackSpline(newSplineData, coaster.roadGeo);
+
+    // Switch Ghost Car system to track-specific recording and ghost model
+    const trackBestLap = ghostSystem.setTrack(newTrackId, newSplineData.total_length_m);
+
+    // Re-project minimap radar for the new circuit
+    initMinimapCanvas(newSplineData);
+
+    cancelF1StartCountdown();
+    updateTrackUiElements(curDef, trackBestLap);
+  }
+
+  // Bind Welcome Dialog track selection cards
+  document.querySelectorAll('#welcome-track-cards .track-select-card').forEach((card) => {
+    card.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const trId = card.dataset.track;
+      if (trId) {
+        switchTrack(trId);
+      }
+    });
+  });
+
+  if (btnHudTrackBadge) {
+    btnHudTrackBadge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openTrackModal();
+    });
+  }
+  if (btnTrackClose) {
+    btnTrackClose.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeTrackModal();
+    });
+  }
+  if (btnTrackConfirm) {
+    btnTrackConfirm.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeTrackModal();
+      dismissWelcomeAndStartRace();
+    });
+  }
+  if (btnFinishChangeTrack) {
+    btnFinishChangeTrack.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openTrackModal();
+    });
+  }
+
+  // Initial UI sync for active track
+  updateTrackUiElements(getTrackDefinition(activeTrackId), ghostSystem.getBestLapTime());
+
   if (btnFinishRaceAgain) {
     btnFinishRaceAgain.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -2514,6 +2720,16 @@ async function initApp() {
     } else if (e.code === 'KeyG') {
       const enabled = ghostSystem.toggleGhostEnabled();
       updateGhostButtonUI(enabled);
+    } else if (e.code === 'KeyT') {
+      if (elTrackDialogOverlay && !elTrackDialogOverlay.classList.contains('hidden')) {
+        closeTrackModal();
+      } else {
+        openTrackModal();
+      }
+    } else if (e.code === 'Escape') {
+      if (elTrackDialogOverlay && !elTrackDialogOverlay.classList.contains('hidden')) {
+        closeTrackModal();
+      }
     } else if (e.code === 'KeyR') {
       hideWelcomeDialog();
       hideFinishOverlay();

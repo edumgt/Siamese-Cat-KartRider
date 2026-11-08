@@ -24,6 +24,11 @@ import {
   getTrackSplineData,
   getTrackDefinition,
 } from './scene/TrackRegistry.js';
+import {
+  CHARACTER_DEFINITIONS,
+  getCharacterDefinition,
+  getAllCharacters,
+} from './scene/CharacterRegistry.js';
 
 async function initApp() {
   const container = document.getElementById('canvas-container');
@@ -229,6 +234,11 @@ async function initApp() {
   }
   let splineData = getTrackSplineData(activeTrackId, classicSplineData);
 
+  let activeCharacterId = localStorage.getItem('desk_racer_active_character') || 'siamese';
+  if (!CHARACTER_DEFINITIONS.some((c) => c.id === activeCharacterId)) {
+    activeCharacterId = 'siamese';
+  }
+
   // Sector lookup map
   const sectorNames = {};
   for (const sec of splineData.sectors || []) {
@@ -270,11 +280,11 @@ async function initApp() {
   }
   scene.add(coaster.debugGroup);
 
-  const microKart = buildMicroKart();
+  const microKart = buildMicroKart(activeCharacterId);
   microKart.kartRoot.scale.setScalar(0.38);
   scene.add(microKart.kartRoot);
 
-  const ghostKart = buildGhostKart();
+  const ghostKart = buildGhostKart(activeCharacterId);
   ghostKart.ghostRoot.scale.setScalar(0.38);
   scene.add(ghostKart.ghostRoot);
 
@@ -2044,6 +2054,12 @@ async function initApp() {
     const finishTrackIconEl = document.getElementById('finish-track-icon');
     if (finishTrackNameEl) finishTrackNameEl.textContent = `${curDef.name} (${curDef.nameKr})`;
     if (finishTrackIconEl) finishTrackIconEl.textContent = curDef.icon;
+
+    const curCharDef = getCharacterDefinition(activeCharacterId);
+    const finishDriverNameEl = document.getElementById('finish-driver-name');
+    const finishDriverIconEl = document.getElementById('finish-driver-icon');
+    if (finishDriverNameEl) finishDriverNameEl.textContent = `${curCharDef.name} (${curCharDef.nameKr})`;
+    if (finishDriverIconEl) finishDriverIconEl.textContent = curCharDef.icon;
     if (elFinishGhost) {
       if (ghostRes && ghostRes.isNewRecord) {
         elFinishGhost.classList.remove('hidden');
@@ -2672,8 +2688,148 @@ async function initApp() {
     });
   }
 
-  // Initial UI sync for active track
+  // -------------------------------------------------------------------------
+  // 5-SPECIES CHARACTER DRIVER SELECTOR
+  // -------------------------------------------------------------------------
+  const btnHudPilotChip = document.getElementById('btn-hud-pilot-chip');
+  const hudPilotIconEl = document.getElementById('hud-pilot-icon');
+  const hudPilotLabelEl = document.getElementById('hud-pilot-label');
+  const elCharacterDialogOverlay = document.getElementById('character-dialog-overlay');
+  const characterModalCardsEl = document.getElementById('character-modal-cards');
+  const btnCharacterClose = document.getElementById('btn-character-close');
+  const btnCharacterConfirm = document.getElementById('btn-character-confirm');
+  const btnFinishChangeDriver = document.getElementById('btn-finish-change-driver');
+  const finishDriverIconEl = document.getElementById('finish-driver-icon');
+  const finishDriverNameEl = document.getElementById('finish-driver-name');
+
+  function updateCharacterUiElements(charDef) {
+    if (hudPilotIconEl) hudPilotIconEl.textContent = charDef.icon;
+    if (hudPilotLabelEl) hudPilotLabelEl.textContent = `${charDef.name.toUpperCase()} PILOT`;
+    if (finishDriverIconEl) finishDriverIconEl.textContent = charDef.icon;
+    if (finishDriverNameEl) finishDriverNameEl.textContent = `${charDef.name} (${charDef.nameKr})`;
+
+    // Sync Welcome dialog character cards
+    document.querySelectorAll('#welcome-driver-cards .driver-select-card').forEach((card) => {
+      const isSel = card.dataset.character === activeCharacterId;
+      card.classList.toggle('active', isSel);
+    });
+
+    // Sync modal items
+    document.querySelectorAll('.character-modal-item').forEach((item) => {
+      const isSel = item.dataset.character === activeCharacterId;
+      item.classList.toggle('active', isSel);
+    });
+  }
+
+  function renderCharacterModalCards() {
+    if (!characterModalCardsEl) return;
+    characterModalCardsEl.innerHTML = '';
+    for (const def of CHARACTER_DEFINITIONS) {
+      const isAct = def.id === activeCharacterId;
+      const item = document.createElement('div');
+      item.className = `character-modal-item ${isAct ? 'active' : ''}`;
+      item.dataset.character = def.id;
+      item.setAttribute('role', 'button');
+      item.setAttribute('tabindex', '0');
+      item.innerHTML = `
+        <div class="character-item-left">
+          <span class="character-item-icon">${def.icon}</span>
+          <div class="character-item-title-col">
+            <span class="character-item-name">${def.name} <span class="track-card-kr">(${def.nameKr})</span></span>
+            <span class="character-item-desc">${def.descriptionKr}</span>
+          </div>
+        </div>
+        <div class="character-item-right">
+          <span class="character-item-badge">${def.badge}</span>
+        </div>
+      `;
+      item.addEventListener('click', () => {
+        switchCharacter(def.id);
+        renderCharacterModalCards();
+      });
+      characterModalCardsEl.appendChild(item);
+    }
+  }
+
+  function openCharacterModal() {
+    hideWelcomeDialog();
+    hideFinishOverlay();
+    hideLapSplit();
+    cancelF1StartCountdown();
+    renderCharacterModalCards();
+    if (elCharacterDialogOverlay) {
+      elCharacterDialogOverlay.classList.remove('hidden');
+    }
+  }
+
+  function closeCharacterModal() {
+    if (elCharacterDialogOverlay) {
+      elCharacterDialogOverlay.classList.add('hidden');
+    }
+  }
+
+  function switchCharacter(newCharId) {
+    if (!CHARACTER_DEFINITIONS.some((c) => c.id === newCharId)) {
+      newCharId = 'siamese';
+    }
+    activeCharacterId = newCharId;
+    try {
+      localStorage.setItem('desk_racer_active_character', newCharId);
+    } catch (_e) {}
+
+    const curCharDef = getCharacterDefinition(newCharId);
+
+    // Update 3D drivers on player kart and ghost kart
+    if (microKart.setDriverCharacter) {
+      microKart.setDriverCharacter(newCharId);
+    }
+    if (ghostKart.setDriverCharacter) {
+      ghostKart.setDriverCharacter(newCharId);
+    }
+
+    updateCharacterUiElements(curCharDef);
+  }
+
+  // Bind Welcome Dialog driver selection cards
+  document.querySelectorAll('#welcome-driver-cards .driver-select-card').forEach((card) => {
+    card.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const chId = card.dataset.character;
+      if (chId) {
+        switchCharacter(chId);
+      }
+    });
+  });
+
+  if (btnHudPilotChip) {
+    btnHudPilotChip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openCharacterModal();
+    });
+  }
+  if (btnCharacterClose) {
+    btnCharacterClose.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeCharacterModal();
+    });
+  }
+  if (btnCharacterConfirm) {
+    btnCharacterConfirm.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeCharacterModal();
+      dismissWelcomeAndStartRace();
+    });
+  }
+  if (btnFinishChangeDriver) {
+    btnFinishChangeDriver.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openCharacterModal();
+    });
+  }
+
+  // Initial UI sync for active track and character
   updateTrackUiElements(getTrackDefinition(activeTrackId), ghostSystem.getBestLapTime());
+  updateCharacterUiElements(getCharacterDefinition(activeCharacterId));
 
   if (btnFinishRaceAgain) {
     btnFinishRaceAgain.addEventListener('click', (e) => {
@@ -2726,9 +2882,18 @@ async function initApp() {
       } else {
         openTrackModal();
       }
+    } else if (e.code === 'KeyC') {
+      if (elCharacterDialogOverlay && !elCharacterDialogOverlay.classList.contains('hidden')) {
+        closeCharacterModal();
+      } else {
+        openCharacterModal();
+      }
     } else if (e.code === 'Escape') {
       if (elTrackDialogOverlay && !elTrackDialogOverlay.classList.contains('hidden')) {
         closeTrackModal();
+      }
+      if (elCharacterDialogOverlay && !elCharacterDialogOverlay.classList.contains('hidden')) {
+        closeCharacterModal();
       }
     } else if (e.code === 'KeyR') {
       hideWelcomeDialog();

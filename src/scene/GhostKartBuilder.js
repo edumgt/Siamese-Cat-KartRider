@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildSiameseCatDriver } from './SiameseCatDriver.js';
+import { buildCharacterDriver } from './CharacterDriverBuilder.js';
 
 /**
  * Builds the 1:87 Scale Holographic Ghost Car for Time-Trial Lap Replays.
@@ -10,7 +10,7 @@ import { buildSiameseCatDriver } from './SiameseCatDriver.js';
  * - 4 spinning wheels & steerable front pivots
  * - GLB clone conversion support (transforms glb meshes into glowing transparent hologram)
  */
-export function buildGhostKart() {
+export function buildGhostKart(initialCharacterId = 'siamese') {
   const ghostRoot = new THREE.Group();
   ghostRoot.name = 'GhostKartRoot';
   ghostRoot.visible = false; // Hidden until ghost data is available
@@ -19,9 +19,18 @@ export function buildGhostKart() {
   chassisGroup.name = 'GhostChassisBody';
   ghostRoot.add(chassisGroup);
 
-  // Holographic Siamese Cat Driver
-  const ghostCatDriver = buildSiameseCatDriver({ isGhost: true });
-  chassisGroup.add(ghostCatDriver.root);
+  // Holographic Animal Driver (5 Species)
+  let currentGhostDriver = buildCharacterDriver(initialCharacterId, { isGhost: true });
+  chassisGroup.add(currentGhostDriver.root);
+
+  function setDriverCharacter(charId) {
+    if (currentGhostDriver && currentGhostDriver.root) {
+      chassisGroup.remove(currentGhostDriver.root);
+    }
+    currentGhostDriver = buildCharacterDriver(charId, { isGhost: true });
+    chassisGroup.add(currentGhostDriver.root);
+    return currentGhostDriver;
+  }
 
   let currentOpacity = 0.52;
   const ghostMaterials = [];
@@ -237,7 +246,9 @@ export function buildGhostKart() {
     for (const p of frontPivots) {
       p.rotation.y = steerAngle || 0;
     }
-    ghostCatDriver.update(dt, speed, steerAngle, performance.now() * 0.001);
+    if (currentGhostDriver) {
+      currentGhostDriver.update(dt, speed, steerAngle, performance.now() * 0.001);
+    }
   }
 
   // 5. Update Visual Effects (Hologram pulse & ethereal flicker)
@@ -303,9 +314,11 @@ export function buildGhostKart() {
       }
     });
 
-    // Hide procedural meshes once GLB ghost is ready, keeping ghostCatDriver visible
+    // Hide procedural meshes once GLB ghost is ready, keeping driver visible
     proceduralGroup.visible = false;
-    ghostCatDriver.root.visible = true;
+    if (currentGhostDriver && currentGhostDriver.root) {
+      currentGhostDriver.root.visible = true;
+    }
     chassisGroup.add(clone);
 
     if (glbAllWheels.length > 0) {
@@ -335,5 +348,6 @@ export function buildGhostKart() {
     attachGlbGhost,
     setVisible,
     setOpacity,
+    setDriverCharacter,
   };
 }

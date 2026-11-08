@@ -1,12 +1,12 @@
 import * as THREE from 'three';
-import { buildSiameseCatDriver } from './SiameseCatDriver.js';
+import { buildCharacterDriver } from './CharacterDriverBuilder.js';
 
 /**
  * Builds the 1:87 HO Micro-Coaster Racing Go-Kart (18mm x 12mm x 8mm)
- * with 4 steerable/spinning wheels, helmeted driver, steering wheel,
+ * with 4 steerable/spinning wheels, animal driver, steering wheel,
  * twin turbo exhaust flames, headlights, and a 120-particle drift spark emitter.
  */
-export function buildMicroKart() {
+export function buildMicroKart(initialCharacterId = 'siamese') {
   const kartRoot = new THREE.Group();
   kartRoot.name = 'Kart1to87Root';
 
@@ -432,10 +432,21 @@ export function buildMicroKart() {
   seat.rotation.x = -0.22;
   chassisGroup.add(seat);
 
-  // Siamese Cat Driver (Seal-point cream/fawn body, espresso mask/ears/paws, sapphire eyes)
-  const catDriver = buildSiameseCatDriver();
-  chassisGroup.add(catDriver.root);
-  const driverHead = catDriver.headGroup;
+  // Procedural Animal Driver (5 Species selectable: Siamese, Shiba, Otter, Retriever, Panda)
+  let currentDriver = buildCharacterDriver(initialCharacterId);
+  chassisGroup.add(currentDriver.root);
+
+  function setDriverCharacter(charId) {
+    if (currentDriver && currentDriver.root) {
+      chassisGroup.remove(currentDriver.root);
+    }
+    currentDriver = buildCharacterDriver(charId);
+    if (cockpitRoadOnly && currentDriver.root) {
+      currentDriver.root.visible = false;
+    }
+    chassisGroup.add(currentDriver.root);
+    return currentDriver;
+  }
 
   // Steering Column & Rotating Steering Wheel
   const steeringWheel = new THREE.Mesh(
@@ -673,9 +684,13 @@ export function buildMicroKart() {
       p.rotation.y = THREE.MathUtils.lerp(p.rotation.y, targetSteerRad, Math.min(1, dt * 16));
     }
     steeringWheel.rotation.z = targetSteerRad * 1.6;
-    driverHead.rotation.z = -targetSteerRad * 0.45;
-    driverHead.rotation.y = targetSteerRad * 0.55;
-    catDriver.update(dt, speed, targetSteerRad, now * 0.001);
+    if (currentDriver) {
+      if (currentDriver.headGroup) {
+        currentDriver.headGroup.rotation.z = -targetSteerRad * 0.45;
+        currentDriver.headGroup.rotation.y = targetSteerRad * 0.55;
+      }
+      currentDriver.update(dt, speed, targetSteerRad, now * 0.001);
+    }
   }
 
   function updateKartVisuals(dt, state) {
@@ -828,7 +843,9 @@ export function buildMicroKart() {
   function setCockpitRoadOnly(isRoadOnly) {
     cockpitRoadOnly = Boolean(isRoadOnly);
     kartShadowQuad.visible = !cockpitRoadOnly;
-    catDriver.root.visible = !cockpitRoadOnly;
+    if (currentDriver && currentDriver.root) {
+      currentDriver.root.visible = !cockpitRoadOnly;
+    }
     if (attachedGlbScene) {
       attachedGlbScene.visible = !cockpitRoadOnly;
     } else {
@@ -1053,5 +1070,7 @@ export function buildMicroKart() {
     updateWheels,
     updateKartVisuals,
     attachGlbKart,
+    setDriverCharacter,
+    getDriverCharacter: () => currentDriver?.characterId || 'siamese',
   };
 }

@@ -52,10 +52,20 @@
             </button>
           </div>
           <div class="hud-sub-badge-row">
-            <div id="hud-pilot-chip" class="hud-pilot-chip" title="Driver: Siamese Cat (샴 고양이)">
+            <button
+              id="btn-hud-pilot-chip"
+              class="hud-pilot-chip"
+              type="button"
+              role="button"
+              tabindex="0"
+              aria-label="Select Driver / 캐릭터 선택 (C)"
+              title="Select Driver / 캐릭터 선택 (C)"
+            >
               <span class="pilot-dot"></span>
-              <span class="pilot-label">SIAMESE CAT PILOT 🐾</span>
-            </div>
+              <span id="hud-pilot-icon" class="pilot-icon">🐱</span>
+              <span id="hud-pilot-label" class="pilot-label">SIAMESE CAT PILOT</span>
+              <span class="track-badge-key">C</span>
+            </button>
           </div>
         </div>
 
@@ -167,6 +177,62 @@
             </div>
           </div>
 
+          <!-- Driver Selection Block (5 Species) -->
+          <div class="welcome-section-group">
+            <div class="welcome-control-label">SELECT DRIVER / 캐릭터 선택 (5종) <kbd class="welcome-inline-kbd">C</kbd></div>
+            <div class="driver-cards-grid" id="welcome-driver-cards">
+              <div class="driver-select-card active" data-character="siamese" role="button" tabindex="0">
+                <div class="driver-card-header">
+                  <span class="driver-card-icon">🐱</span>
+                  <span class="driver-badge-tag tag-cyan">CAT</span>
+                </div>
+                <div class="driver-card-name">Siamese Cat</div>
+                <div class="driver-card-kr">샴 고양이</div>
+                <div class="driver-card-tagline">사파이어 눈동자 &amp; 고글</div>
+              </div>
+
+              <div class="driver-select-card" data-character="shiba" role="button" tabindex="0">
+                <div class="driver-card-header">
+                  <span class="driver-card-icon">🐕</span>
+                  <span class="driver-badge-tag tag-gold">DOG</span>
+                </div>
+                <div class="driver-card-name">Shiba Inu</div>
+                <div class="driver-card-kr">시바견</div>
+                <div class="driver-card-tagline">쫑긋 귀 &amp; 도넛 꼬리</div>
+              </div>
+
+              <div class="driver-select-card" data-character="otter" role="button" tabindex="0">
+                <div class="driver-card-header">
+                  <span class="driver-card-icon">🦦</span>
+                  <span class="driver-badge-tag tag-sky">OTTER</span>
+                </div>
+                <div class="driver-card-name">Baby Otter</div>
+                <div class="driver-card-kr">아기 수달</div>
+                <div class="driver-card-tagline">매끄러운 물길 드리프터</div>
+              </div>
+
+              <div class="driver-select-card" data-character="retriever" role="button" tabindex="0">
+                <div class="driver-card-header">
+                  <span class="driver-card-icon">🐶</span>
+                  <span class="driver-badge-tag tag-yellow">PUPPY</span>
+                </div>
+                <div class="driver-card-name">Retriever</div>
+                <div class="driver-card-kr">골든 리트리버</div>
+                <div class="driver-card-tagline">바람에 펄럭이는 큰 귀</div>
+              </div>
+
+              <div class="driver-select-card" data-character="panda" role="button" tabindex="0">
+                <div class="driver-card-header">
+                  <span class="driver-card-icon">🐼</span>
+                  <span class="driver-badge-tag tag-purple">PANDA</span>
+                </div>
+                <div class="driver-card-name">Baby Panda</div>
+                <div class="driver-card-kr">아기 판다</div>
+                <div class="driver-card-tagline">동글동글 대나무 레이서</div>
+              </div>
+            </div>
+          </div>
+
           <div class="welcome-controls-grid">
             <!-- WASD Controls -->
             <div class="welcome-control-block">
@@ -196,6 +262,12 @@
                     <kbd class="welcome-key welcome-key-cyan">G</kbd>
                   </div>
                   <span>GHOST CAR</span>
+                </div>
+                <div class="control-key-row">
+                  <div class="control-kbd-pair">
+                    <kbd class="welcome-key welcome-key-gold">C</kbd>
+                  </div>
+                  <span>CHOOSE DRIVER</span>
                 </div>
               </div>
             </div>
@@ -247,6 +319,29 @@
         </div>
       </div>
 
+      <!-- Dedicated Character Driver Selection Modal (Toggled via 'C' or Pilot Chip) -->
+      <div id="character-dialog-overlay" class="welcome-dialog-overlay character-dialog-overlay hidden" role="dialog" aria-labelledby="character-modal-title">
+        <div class="welcome-dialog-card character-modal-card">
+          <div class="welcome-eyebrow">DRIVER SELECTION · 캐릭터 선택 (5종)</div>
+          <h2 id="character-modal-title" class="welcome-title character-modal-title">CHOOSE DRIVER</h2>
+
+          <div class="character-modal-grid" id="character-modal-cards">
+            <!-- Rendered by JS -->
+          </div>
+
+          <div class="finish-actions-row character-modal-actions">
+            <button id="btn-character-confirm" class="welcome-start-btn finish-action-btn" type="button">
+              <span class="welcome-start-text">SELECT RACER</span>
+              <kbd class="welcome-enter-kbd">ENTER ↵</kbd>
+            </button>
+            <button id="btn-character-close" class="welcome-start-btn finish-action-btn finish-autopilot-btn" type="button">
+              <span class="welcome-start-text">CLOSE</span>
+              <kbd class="welcome-enter-kbd">ESC</kbd>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Center Formula 1 Countdown Number (Triggered by pressing Enter at Start) -->
       <div id="hud-f1-countdown" class="hud-f1-countdown hidden">5</div>
 
@@ -261,6 +356,11 @@
             <span class="finish-track-label">CIRCUIT:</span>
             <span id="finish-track-name" class="finish-track-name">Classic Coaster</span>
           </div>
+          <div id="hud-finish-driver-info" class="hud-finish-track-info">
+            <span class="finish-track-icon" id="finish-driver-icon">🐱</span>
+            <span class="finish-track-label">DRIVER:</span>
+            <span id="finish-driver-name" class="finish-track-name">Siamese Cat (샴 고양이)</span>
+          </div>
           <div id="hud-finish-ghost" class="hud-finish-ghost hidden">
             <span class="finish-ghost-tag">GHOST</span>
             <span id="hud-finish-ghost-sub">NEW BEST LAP RECORD!</span>
@@ -269,6 +369,10 @@
             <button id="btn-finish-race-again" class="welcome-start-btn finish-action-btn" type="button">
               <span class="welcome-start-text">RACE AGAIN</span>
               <kbd class="welcome-enter-kbd">ENTER ↵</kbd>
+            </button>
+            <button id="btn-finish-change-driver" class="welcome-start-btn finish-action-btn finish-change-track-btn" type="button">
+              <span class="welcome-start-text">SELECT DRIVER</span>
+              <kbd class="welcome-enter-kbd">C</kbd>
             </button>
             <button id="btn-finish-change-track" class="welcome-start-btn finish-action-btn finish-change-track-btn" type="button">
               <span class="welcome-start-text">SELECT TRACK</span>

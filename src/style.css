@@ -1504,9 +1504,9 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 9px;
-  background: rgba(255, 170, 68, 0.12);
-  border: 1px solid rgba(255, 170, 68, 0.38);
+  padding: 3px 10px;
+  background: rgba(255, 170, 68, 0.14);
+  border: 1px solid rgba(255, 170, 68, 0.42);
   border-radius: 999px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 9.5px;
@@ -1514,6 +1514,23 @@ body {
   letter-spacing: 0.08em;
   color: #ffd27d;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hud-pilot-chip:hover {
+  background: rgba(255, 170, 68, 0.28);
+  border-color: #ffaa44;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(255, 170, 68, 0.35);
+}
+
+.pilot-icon {
+  font-size: 13px;
+  line-height: 1;
 }
 
 .pilot-dot {
@@ -1521,13 +1538,111 @@ body {
   height: 6px;
   border-radius: 50%;
   background: #ffaa44;
-  box-shadow: 0 0 8px #ffaa44;
-  animation: pilotPulse 2.4s infinite ease-in-out;
+  box-shadow: 0 0 6px #ffaa44;
 }
 
-@keyframes pilotPulse {
-  0%, 100% { opacity: 0.45; transform: scale(0.9); }
-  50% { opacity: 1; transform: scale(1.15); }
+.pilot-badge-key {
+  font-size: 8.5px;
+  font-weight: 800;
+  padding: 0.5px 4px;
+  background: rgba(255, 170, 68, 0.25);
+  border: 1px solid rgba(255, 170, 68, 0.6);
+  border-radius: 3px;
+  color: #fff0c8;
+}
+
+/* Driver Selection Cards Grid inside Welcome Dialog */
+.driver-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 7px;
+  margin-top: 8px;
+}
+
+@media (max-width: 680px) {
+  .driver-cards-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.driver-select-card {
+  pointer-events: auto;
+  cursor: pointer;
+  background: rgba(8, 14, 28, 0.72);
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 8px 9px;
+  text-align: left;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.driver-select-card:hover {
+  background: rgba(18, 26, 48, 0.90);
+  border-color: rgba(255, 180, 68, 0.75);
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.85);
+}
+
+.driver-select-card.active {
+  background: linear-gradient(145deg, rgba(255, 170, 68, 0.20) 0%, rgba(18, 22, 38, 0.92) 100%);
+  border-color: #ffaa44;
+  box-shadow:
+    0 0 20px rgba(255, 170, 68, 0.35),
+    0 8px 24px rgba(0, 0, 0, 0.90),
+    inset 0 0 12px rgba(255, 170, 68, 0.15);
+}
+
+.driver-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.driver-card-icon {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.driver-badge-tag {
+  font-family: 'Orbitron', sans-serif;
+  font-style: italic;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 1px 4.5px;
+  border-radius: 3px;
+}
+
+.driver-card-name {
+  font-family: 'Orbitron', sans-serif;
+  font-style: italic;
+  font-size: 11px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.driver-card-kr {
+  font-family: 'Inter', sans-serif;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: rgba(255, 215, 150, 0.85);
+  margin-top: 1px;
+}
+
+.driver-card-tagline {
+  font-family: 'Inter', sans-serif;
+  font-size: 8px;
+  font-weight: 500;
+  color: rgba(210, 225, 245, 0.65);
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Circuit Selector inside Welcome Dialog */
@@ -1635,6 +1750,24 @@ body {
   background: rgba(34, 197, 94, 0.22);
   border: 1px solid rgba(34, 197, 94, 0.65);
   color: #86efac;
+}
+
+.tag-sky {
+  background: rgba(14, 165, 233, 0.22);
+  border: 1px solid rgba(14, 165, 233, 0.65);
+  color: #7dd3fc;
+}
+
+.tag-yellow {
+  background: rgba(234, 179, 8, 0.22);
+  border: 1px solid rgba(234, 179, 8, 0.65);
+  color: #fde047;
+}
+
+.welcome-key-gold {
+  background: rgba(255, 170, 68, 0.22) !important;
+  border-color: rgba(255, 170, 68, 0.65) !important;
+  color: #ffd27d !important;
 }
 
 .track-card-name {
@@ -1809,4 +1942,107 @@ body {
 .finish-track-name {
   color: #00e5ff;
   text-shadow: 0 0 12px rgba(0, 229, 255, 0.65);
+}
+
+/* Dedicated Character Driver Selection Modal */
+.character-dialog-overlay {
+  z-index: 64;
+}
+
+.character-modal-card {
+  width: min(620px, 92vw);
+  padding: 26px 30px 22px;
+}
+
+.character-modal-title {
+  margin-bottom: 18px;
+}
+
+.character-modal-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.character-modal-item {
+  pointer-events: auto;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  background: rgba(8, 14, 28, 0.76);
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  border-radius: 9px;
+  text-align: left;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.character-modal-item:hover {
+  background: rgba(20, 26, 46, 0.90);
+  border-color: rgba(255, 170, 68, 0.65);
+  transform: translateX(3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.85);
+}
+
+.character-modal-item.active {
+  background: linear-gradient(135deg, rgba(255, 170, 68, 0.18) 0%, rgba(18, 20, 36, 0.92) 100%);
+  border-color: #ffaa44;
+  box-shadow:
+    0 0 22px rgba(255, 170, 68, 0.35),
+    0 8px 26px rgba(0, 0, 0, 0.90);
+}
+
+.character-item-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.character-item-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.character-item-title-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.character-item-name {
+  font-family: 'Orbitron', sans-serif;
+  font-style: italic;
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.04em;
+}
+
+.character-item-desc {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: rgba(210, 225, 245, 0.70);
+  margin-top: 2px;
+}
+
+.character-item-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.character-item-badge {
+  font-family: 'Orbitron', sans-serif;
+  font-style: italic;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(255, 170, 68, 0.22);
+  border: 1px solid rgba(255, 170, 68, 0.65);
+  color: #ffd27d;
 }

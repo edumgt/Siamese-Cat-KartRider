@@ -6,6 +6,30 @@ import * as THREE from 'three';
  */
 export const TRACK_DEFINITIONS = [
   {
+    id: 'hallasan',
+    name: 'Jeju Mt. Hallasan',
+    nameKr: '제주 한라산 1100 도로',
+    tagline: 'Mystic Volcanic Mountain & Tangerine Valley',
+    taglineKr: '한라산 1100고지 · 돌하르방 & 탐라 감귤길 힐링 레이스',
+    icon: '🌋',
+    difficulty: 'Scenic & Winding',
+    difficultyKr: '경관 와인딩',
+    lengthM: 3.98,
+    turns: 14,
+    color: '#ff8a00',
+    badgeText: 'JEJU ISLAND',
+    description: 'Iconic Korean mountain scenic highway winding past Mt. Hallasan volcanic peak, Baeknokdam crater, ancient Dol Hareubang basalt grandfathers, Saryeoni cedar forests, and sweet tangerine orchards.',
+    descriptionKr: '대한민국 최고봉 한라산과 백록담 영봉을 배경으로 달리는 1100고지 절경 코스. 웅장한 돌하르방 현무암 관문, 사려니 삼나무 숲길, 샛노란 유채꽃밭과 탐라 감귤 과수원이 펼쳐지는 환상적인 힐링 레이스입니다.',
+    sectors: [
+      { id: 1, name: 'Hallasan Foothills (한라산 산록도로)' },
+      { id: 2, name: 'Dol Hareubang Basalt Gate (돌하르방 현무암 관문)' },
+      { id: 3, name: 'Saryeoni Cedar Forest Tunnel (사려니 삼나무 숲길)' },
+      { id: 4, name: '1100 Highland Ridge & Baeknokdam (1100고지 백록담 조망로)' },
+      { id: 5, name: 'Oreum & Windmill Winding (오름 & 풍력발전기 밸리)' },
+      { id: 6, name: 'Tamra Tangerine Orchard Straight (탐라 감귤길 피니시)' },
+    ],
+  },
+  {
     id: 'classic',
     name: 'Classic Coaster',
     nameKr: '클래식 코스터',
@@ -183,8 +207,8 @@ function buildSplineDataFromControlPoints(def, controlPoints, startFinishIdx = 0
     id: def.id,
     name: def.name,
     is_closed_periodic_loop: true,
-    track_width_m: def.id === 'countryside' ? 0.024 : 0.022,
-    curb_width_m: def.id === 'countryside' ? 0.0028 : 0.0025,
+    track_width_m: def.id === 'countryside' ? 0.024 : (def.id === 'hallasan' ? 0.023 : 0.022),
+    curb_width_m: def.id === 'countryside' ? 0.0028 : (def.id === 'hallasan' ? 0.0026 : 0.0025),
     rail_height_m: 0.0035,
     total_length_m: Number(totalLength.toFixed(4)),
     scale_equivalent_length_m: Number((totalLength * 87.0).toFixed(1)),
@@ -306,8 +330,47 @@ const COUNTRYSIDE_CONTROL_POINTS = [
 ];
 
 /**
+ * Control points for Jeju Mt. Hallasan: high-altitude volcanic mountain & 1100 Road circuit
+ * Format: [x, y, z, bank_deg, sector_id]
+ */
+const HALLASAN_CONTROL_POINTS = [
+  // Sector 6 -> Sector 1: Tamra Tangerine Orchard Straight & Start Line
+  [0.08, 0.018, 0.238, 0.0, 6],
+  [-0.06, 0.018, 0.238, 0.0, 1],
+  [-0.20, 0.022, 0.232, 6.0, 1],
+
+  // Sector 1: Hallasan Foothills S-Curve (Gentle climb through the foothills)
+  [-0.32, 0.028, 0.205, 10.0, 1],
+  [-0.42, 0.035, 0.150, 12.0, 1],
+  [-0.46, 0.042, 0.070, 8.0, 1],
+
+  // Sector 2: Dol Hareubang Basalt Gate (Passing between the giant stone grandfathers)
+  [-0.44, 0.048, -0.020, -10.0, 2],
+  [-0.36, 0.054, -0.095, -14.0, 2],
+  [-0.24, 0.060, -0.150, 8.0, 2],
+
+  // Sector 3: Saryeoni Cedar Forest Tunnel (Ascending deep through towering cedars)
+  [-0.10, 0.066, -0.165, 12.0, 3],
+  [0.02, 0.072, -0.155, -8.0, 3],
+  [0.14, 0.076, -0.160, 14.0, 3],
+
+  // Sector 4: 1100 Highland Ridge & Baeknokdam View (High Apex ~7.8cm with panoramic mountain vistas!)
+  [0.26, 0.078, -0.130, 16.0, 4],
+  [0.36, 0.074, -0.060, -12.0, 4],
+  [0.44, 0.065, 0.020, 15.0, 4],
+
+  // Sector 5: Oreum Valley Winding Downhill (Dynamic downhill curves winding around volcanic oreum)
+  [0.46, 0.052, 0.105, 18.0, 5],
+  [0.42, 0.040, 0.175, -14.0, 5],
+  [0.34, 0.030, 0.220, 10.0, 5],
+
+  // Sector 6: Tangerine Orchard Return Straight back to Start
+  [0.22, 0.022, 0.238, 2.0, 6],
+];
+
+/**
  * Returns the splineData object for the requested track ID.
- * @param {string} trackId - 'classic', 'gymkhana', 'infinity', or 'countryside'
+ * @param {string} trackId - 'hallasan', 'classic', 'gymkhana', 'infinity', or 'countryside'
  * @param {object} defaultClassicSpline - Pre-loaded track_spline.json if available
  */
 export function getTrackSplineData(trackId, defaultClassicSpline = null) {
@@ -327,6 +390,12 @@ export function getTrackSplineData(trackId, defaultClassicSpline = null) {
   }
 
   const def = TRACK_DEFINITIONS.find((t) => t.id === trackId) || TRACK_DEFINITIONS[0];
+
+  if (trackId === 'hallasan') {
+    const generated = buildSplineDataFromControlPoints(def, HALLASAN_CONTROL_POINTS, 0, 1);
+    splineCache.set('hallasan', generated);
+    return generated;
+  }
 
   if (trackId === 'gymkhana') {
     const generated = buildSplineDataFromControlPoints(def, GYMKHANA_CONTROL_POINTS, 0, 1);

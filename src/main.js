@@ -228,9 +228,12 @@ async function initApp() {
   const manifest = await manifestRes.json();
   const classicSplineData = await splineRes.json();
 
-  let activeTrackId = localStorage.getItem('desk_racer_active_track') || 'classic';
-  if (!TRACK_DEFINITIONS.some((t) => t.id === activeTrackId)) {
-    activeTrackId = 'classic';
+  let activeTrackId = localStorage.getItem('desk_racer_active_track');
+  if (!activeTrackId || !TRACK_DEFINITIONS.some((t) => t.id === activeTrackId) || activeTrackId === 'classic') {
+    activeTrackId = 'hallasan';
+    try {
+      localStorage.setItem('desk_racer_active_track', 'hallasan');
+    } catch (_e) {}
   }
   let splineData = getTrackSplineData(activeTrackId, classicSplineData);
 
@@ -274,6 +277,10 @@ async function initApp() {
   scene.add(roomEnv.roomRoot);
 
   let coaster = buildCoasterTrack(splineData);
+  if (activeTrackId === 'hallasan') {
+    if (scene.fog) scene.fog.color.setHex(0x192434);
+    scene.background.setHex(0x151f2d);
+  }
   scene.add(coaster.trackGroup);
   if (coaster.underTrackLedGroup) {
     scene.add(coaster.underTrackLedGroup);
@@ -2647,6 +2654,15 @@ async function initApp() {
     // Re-project minimap radar for the new circuit
     initMinimapCanvas(newSplineData);
 
+    // Adjust atmosphere tone for Jeju Mt. Hallasan mountain circuit
+    if (newTrackId === 'hallasan') {
+      if (scene.fog) scene.fog.color.setHex(0x192434);
+      scene.background.setHex(0x151f2d);
+    } else {
+      if (scene.fog) scene.fog.color.setHex(0x181312);
+      scene.background.setHex(0x181312);
+    }
+
     cancelF1StartCountdown();
     updateTrackUiElements(curDef, trackBestLap);
   }
@@ -3222,6 +3238,9 @@ async function initApp() {
     atmosphere.updateAtmosphere(elapsedTime, settings, renderer, bloomPass, scene, diorama);
     if (coaster.updateUnderTrackLed) {
       coaster.updateUnderTrackLed(elapsedTime, settings.trackGlowIntensity ?? 1.00);
+    }
+    if (coaster?.trackGroup?.userData?.hallasanScenery?.userData?.update) {
+      coaster.trackGroup.userData.hallasanScenery.userData.update(elapsedTime, dt);
     }
 
     // 4. Update Camera (Chase / Visor POV / Diorama / Helicopter / Inspector / Course Pan / Room Panorama / Gemini 4 Dresser / Keyboard Heli)

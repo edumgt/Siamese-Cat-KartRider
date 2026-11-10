@@ -4,6 +4,7 @@ import {
   createCheckeredGantryTexture,
 } from './ProceduralTextures.js';
 import { buildCountrysideScenery } from './CountrysideSceneryBuilder.js';
+import { buildJejuHallasanScenery } from './JejuHallasanSceneryBuilder.js';
 
 let cachedSplineSamples = null;
 let cachedV4TrackTextures = null;
@@ -789,9 +790,21 @@ export function buildCoasterTrack(splineData) {
   const curbIndices = [];
 
   const isCountryside = splineData && splineData.id === 'countryside';
-  const redColor = isCountryside ? new THREE.Color(0x2e7d32) : new THREE.Color(0xe8251a);
-  const whiteColor = isCountryside ? new THREE.Color(0xfbf8ee) : new THREE.Color(0xf5f7fa);
-  const silverRailColor = isCountryside ? new THREE.Color(0x6d4c41) : new THREE.Color(0xb8c4d4);
+  const isHallasan = splineData && splineData.id === 'hallasan';
+
+  let redColor = new THREE.Color(0xe8251a);
+  let whiteColor = new THREE.Color(0xf5f7fa);
+  let silverRailColor = new THREE.Color(0xb8c4d4);
+
+  if (isCountryside) {
+    redColor = new THREE.Color(0x2e7d32);
+    whiteColor = new THREE.Color(0xfbf8ee);
+    silverRailColor = new THREE.Color(0x6d4c41);
+  } else if (isHallasan) {
+    redColor = new THREE.Color(0xff7200); // Vivid Jeju Tangerine Orange
+    whiteColor = new THREE.Color(0x24272c); // Deep Porous Volcanic Basalt
+    silverRailColor = new THREE.Color(0x424852); // Basalt rock rail
+  }
 
   let cVertOffset = 0;
   for (let i = 0; i < N; i++) {
@@ -1577,6 +1590,11 @@ export function buildCoasterTrack(splineData) {
   if (splineData && splineData.id === 'countryside') {
     const countrysideScenery = buildCountrysideScenery(splineData);
     trackGroup.add(countrysideScenery);
+  }
+  if (splineData && splineData.id === 'hallasan') {
+    const hallasanScenery = buildJejuHallasanScenery(splineData);
+    trackGroup.add(hallasanScenery);
+    trackGroup.userData.hallasanScenery = hallasanScenery;
   }
 
   return {

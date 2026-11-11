@@ -886,20 +886,20 @@ export async function createKartPhysicsController(splineData, manifest, roadGeo)
     );
 
     if (!isAiCruise) {
-      // Automatic Cornering Slip & Sparks when steering hard into a curve at speed
-      if (
-        Math.abs(state.steerInput) > 0.35 &&
-        Math.abs(frame.signedCurvature) > 0.30 &&
-        state.speed > 0.11
-      ) {
+      // Drifting slip & rear wheel particles trigger when holding A or D (steering) while moving
+      const isHoldingAorD =
+        (Math.abs(turnRight) > 0.1 || Math.abs(state.steerInput) > 0.16 || Math.abs(state.steerAngle) > 0.06) &&
+        Math.abs(state.speed) > 0.032;
+
+      if (isHoldingAorD) {
         state.isDrifting = true;
-        state.driftDir = Math.sign(turnRight) || Math.sign(state.steerInput) || 1;
+        state.driftDir = Math.sign(turnRight) || Math.sign(state.steerInput) || (state.steerAngle > 0 ? -1 : 1);
         state.driftAngle = THREE.MathUtils.lerp(
           state.driftAngle,
-          -state.driftDir * 0.18,
-          1.0 - Math.exp(-10.0 * clampedDt)
+          -state.driftDir * 0.22,
+          1.0 - Math.exp(-12.0 * clampedDt)
         );
-        state.boostCharge = Math.min(1.0, state.boostCharge + clampedDt * 0.32);
+        state.boostCharge = Math.min(1.0, state.boostCharge + clampedDt * 0.35);
       } else {
         state.isDrifting = false;
         state.driftDir = 0;

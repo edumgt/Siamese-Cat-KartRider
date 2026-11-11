@@ -19,6 +19,7 @@ import { buildRoomEnvironment } from './scene/RoomEnvironmentBuilder.js';
 import { createKartPhysicsController } from './physics/KartPhysicsController.js';
 import { createWebAudioSynth } from './audio/WebAudioSynth.js';
 import { createGhostSystem } from './ghost/GhostSystem.js';
+import { createKartDriftParticleSystem } from './scene/KartDriftParticleSystem.js';
 import {
   TRACK_DEFINITIONS,
   getTrackSplineData,
@@ -294,6 +295,9 @@ async function initApp() {
   const ghostKart = buildGhostKart(activeCharacterId);
   ghostKart.ghostRoot.scale.setScalar(0.38);
   scene.add(ghostKart.ghostRoot);
+
+  const driftParticles = createKartDriftParticleSystem();
+  scene.add(driftParticles.group);
 
   const ghostSystem = createGhostSystem(ghostKart, splineData.total_length_m || 3.8371, activeTrackId);
   let trackGlbScene = null;
@@ -849,6 +853,8 @@ async function initApp() {
 
   let camShakeTimer = 0.0;
   let camShakeIntensity = 0.0;
+  let smoothDriftShake = 0.0;
+  const _camDroneJitter = new THREE.Vector3();
 
   if (physics.onRailImpact) {
     physics.onRailImpact((severity = 0.7) => {
@@ -857,6 +863,9 @@ async function initApp() {
       }
       camShakeTimer = 0.18;
       camShakeIntensity = THREE.MathUtils.clamp(severity, 0.35, 1.0);
+      if (driftParticles && driftParticles.triggerBoundaryImpact) {
+        driftParticles.triggerBoundaryImpact(severity, physics.state, microKart?.kartRoot);
+      }
     });
   }
 
@@ -1189,6 +1198,14 @@ async function initApp() {
       const smoothLook = isScreenshotMode ? 1.0 : 1.0 - Math.exp(-dt * 9.5);
       camCurrentPos.lerp(_camDesiredPos, smoothPos);
       camCurrentLookAt.lerp(_camDesiredLook, smoothLook);
+      if (smoothDriftShake > 0.005) {
+        _camDroneJitter.set(
+          Math.sin(elapsedTime * 65.0) * (0.00045 * smoothDriftShake),
+          Math.cos(elapsedTime * 88.0) * (0.00030 * smoothDriftShake),
+          Math.sin(elapsedTime * 95.0) * (0.00025 * smoothDriftShake)
+        );
+        camCurrentLookAt.add(_camDroneJitter);
+      }
       camera.up.set(0, 1, 0);
       camera.position.copy(camCurrentPos);
       camera.lookAt(camCurrentLookAt);
@@ -1245,7 +1262,7 @@ async function initApp() {
       return;
     }
 
-    // Subtle 1P guardrail impact camera shake (±0.8mm decayed over 0.18s)
+    // 1. Subtle 1P guardrail impact camera shake (±0.8mm decayed over 0.18s)
     let shakeRight = 0.0;
     let shakeUp = 0.0;
     if (camShakeTimer > 0.0 && !isScreenshotMode) {
@@ -1253,6 +1270,37 @@ async function initApp() {
       const shakeDecay = (camShakeTimer / 0.18) * camShakeIntensity;
       shakeRight = Math.sin(elapsedTime * 95.0) * 0.0008 * shakeDecay;
       shakeUp = Math.cos(elapsedTime * 125.0) * 0.0008 * shakeDecay;
+    }
+
+    // 2. Subtle Drift & Boundary Screen-Shake: Triggers when drifting or hitting track boundaries,
+    // scaling in intensity with drift speed (higher speed = more vigorous tire scrub & vibration)
+    const isDriftActive = driftParticles ? driftParticles.isDrifting() : Boolean(st.isDrifting && Math.abs(st.speed) > 0.032);
+    const isBoundaryActive = driftParticles ? driftParticles.isHittingBoundary() : Boolean(st.railImpactActive);
+    const driftSpeed = driftParticles ? driftParticles.getDriftSpeed() : Math.abs(st.speed || 0.0);
+    const normDriftSpeed = THREE.MathUtils.clamp((driftSpeed - 0.032) / 0.18, 0.0, 1.0);
+    const targetDriftIntensity = (!isScreenshotMode && (isDriftActive || isBoundaryActive))
+      ? (isBoundaryActive ? Math.max(0.65, 0.45 + 0.55 * normDriftSpeed) : (0.25 + 0.75 * normDriftSpeed))
+      : 0.0;
+    const rampRate = (isDriftActive || isBoundaryActive) ? 14.0 : 8.0;
+    smoothDriftShake = THREE.MathUtils.lerp(smoothDriftShake, targetDriftIntensity, 1.0 - Math.exp(-rampRate * dt));
+
+    let driftShakeLookRight = 0.0;
+    let driftShakeLookUp = 0.0;
+    let driftRoll = 0.0;
+
+    if (smoothDriftShake > 0.001) {
+      const driftVibeFreq = 68.0 + 32.0 * normDriftSpeed;
+      const oscRight = Math.sin(elapsedTime * driftVibeFreq) * 0.68 + Math.sin(elapsedTime * (driftVibeFreq * 1.57)) * 0.32;
+      const oscUp = Math.cos(elapsedTime * (driftVibeFreq * 1.18)) * 0.62 + Math.sin(elapsedTime * (driftVibeFreq * 2.12)) * 0.38;
+
+      const driftShakeRight = oscRight * (0.00048 * smoothDriftShake);
+      const driftShakeUp = oscUp * (0.00032 * smoothDriftShake);
+      shakeRight += driftShakeRight;
+      shakeUp += driftShakeUp;
+
+      driftShakeLookRight = driftShakeRight * 0.35;
+      driftShakeLookUp = driftShakeUp * 0.25;
+      driftRoll = Math.sin(elapsedTime * (driftVibeFreq * 0.78)) * (0.0042 * smoothDriftShake);
     }
 
     if (activeCameraMode === 1) {
@@ -1272,12 +1320,20 @@ async function initApp() {
         .copy(st.position)
         .addScaledVector(camForward, 0.024)
         .addScaledVector(st.normal, 0.0030 + st.hopHeight * 0.22);
+      if (driftShakeLookRight !== 0.0 || driftShakeLookUp !== 0.0) {
+        _camDesiredLook
+          .addScaledVector(st.right, driftShakeLookRight)
+          .addScaledVector(st.normal, driftShakeLookUp);
+      }
 
       const smoothUp = isScreenshotMode ? 1.0 : 1.0 - Math.exp(-dt * 16.0);
       _camBlendedUp
         .set(0, 0.58, 0)
         .addScaledVector(st.normal, 0.42)
         .normalize();
+      if (driftRoll !== 0.0) {
+        _camBlendedUp.applyAxisAngle(camForward, driftRoll);
+      }
       camCurrentUp.lerp(_camBlendedUp, smoothUp).normalize();
 
       camCurrentPos.copy(_camDesiredPos);
@@ -1302,9 +1358,18 @@ async function initApp() {
         .copy(st.position)
         .addScaledVector(camForward, 0.032)
         .addScaledVector(st.normal, 0.0026);
+      if (driftShakeLookRight !== 0.0 || driftShakeLookUp !== 0.0) {
+        _camDesiredLook
+          .addScaledVector(st.right, driftShakeLookRight)
+          .addScaledVector(st.normal, driftShakeLookUp);
+      }
 
       const smoothVisor = isScreenshotMode ? 1.0 : 1.0 - Math.exp(-dt * 24.0);
-      camCurrentUp.lerp(st.normal, smoothVisor).normalize();
+      _camBlendedUp.copy(st.normal);
+      if (driftRoll !== 0.0) {
+        _camBlendedUp.applyAxisAngle(camForward, driftRoll * 0.85);
+      }
+      camCurrentUp.lerp(_camBlendedUp, smoothVisor).normalize();
 
       camCurrentPos.copy(_camDesiredPos);
       camCurrentLookAt.copy(_camDesiredLook);
@@ -3233,6 +3298,7 @@ async function initApp() {
     microKart.kartRoot.quaternion.copy(st.quaternion);
     microKart.updateWheels(dt, st.speed, st.steerAngle);
     microKart.updateKartVisuals(dt, st);
+    driftParticles.update(dt, microKart.kartRoot, st);
 
     // 3. Update Warm Night-Time Lamp Key Lighting, Under-Track Orange/Purple/Blue LEDs & #1E6BFF Mic Aura
     atmosphere.updateAtmosphere(elapsedTime, settings, renderer, bloomPass, scene, diorama);

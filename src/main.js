@@ -231,9 +231,9 @@ async function initApp() {
 
   let activeTrackId = localStorage.getItem('desk_racer_active_track');
   if (!activeTrackId || !TRACK_DEFINITIONS.some((t) => t.id === activeTrackId) || activeTrackId === 'classic') {
-    activeTrackId = 'hallasan';
+    activeTrackId = 'taean';
     try {
-      localStorage.setItem('desk_racer_active_track', 'hallasan');
+      localStorage.setItem('desk_racer_active_track', 'taean');
     } catch (_e) {}
   }
   let splineData = getTrackSplineData(activeTrackId, classicSplineData);
@@ -281,6 +281,9 @@ async function initApp() {
   if (activeTrackId === 'hallasan') {
     if (scene.fog) scene.fog.color.setHex(0x192434);
     scene.background.setHex(0x151f2d);
+  } else if (activeTrackId === 'taean') {
+    if (scene.fog) scene.fog.color.setHex(0x1e2336);
+    scene.background.setHex(0x191f30);
   }
   scene.add(coaster.trackGroup);
   if (coaster.underTrackLedGroup) {
@@ -2719,10 +2722,13 @@ async function initApp() {
     // Re-project minimap radar for the new circuit
     initMinimapCanvas(newSplineData);
 
-    // Adjust atmosphere tone for Jeju Mt. Hallasan mountain circuit
+    // Adjust atmosphere tone for Jeju Mt. Hallasan / Taean West Coast circuits
     if (newTrackId === 'hallasan') {
       if (scene.fog) scene.fog.color.setHex(0x192434);
       scene.background.setHex(0x151f2d);
+    } else if (newTrackId === 'taean') {
+      if (scene.fog) scene.fog.color.setHex(0x1e2336);
+      scene.background.setHex(0x191f30);
     } else {
       if (scene.fog) scene.fog.color.setHex(0x181312);
       scene.background.setHex(0x181312);
@@ -3307,6 +3313,9 @@ async function initApp() {
     }
     if (coaster?.trackGroup?.userData?.hallasanScenery?.userData?.update) {
       coaster.trackGroup.userData.hallasanScenery.userData.update(elapsedTime, dt);
+    }
+    if (coaster?.trackGroup?.userData?.taeanScenery?.userData?.update) {
+      coaster.trackGroup.userData.taeanScenery.userData.update(elapsedTime, dt);
     }
 
     // 4. Update Camera (Chase / Visor POV / Diorama / Helicopter / Inspector / Course Pan / Room Panorama / Gemini 4 Dresser / Keyboard Heli)

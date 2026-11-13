@@ -6,6 +6,30 @@ import * as THREE from 'three';
  */
 export const TRACK_DEFINITIONS = [
   {
+    id: 'taean',
+    name: 'Taean West Coast',
+    nameKr: '태안 서해 해안도로',
+    tagline: 'West Sea Sunset Beach & Coastal Pine Trail',
+    taglineKr: '태안 만리포 해수욕장 · 꽃지 할미바위 & 안면도 해송길',
+    icon: '🏖️',
+    difficulty: 'Scenic Coastal',
+    difficultyKr: '해안 드라이브',
+    lengthM: 3.76,
+    turns: 13,
+    color: '#00c2d1',
+    badgeText: 'WEST SEA',
+    description: 'Scenic Korean West Sea coastal circuit winding past Mallipo Beach boardwalks, Anmyeondo windswept pines, Kkotji Halmi & Harabi sea stacks, Taean salt pans, and a rotating red-white lighthouse.',
+    descriptionKr: '서해안 태안 반도의 황금빛 모래사장과 해넘이 절경을 배경으로 달리는 해안 드라이브 코스. 만리포 해수욕장 파라솔, 안면도 해송 숲길, 꽃지 할미·할아비 바위와 태안 천일염 염전, 빨간 등대가 펼쳐집니다.',
+    sectors: [
+      { id: 1, name: 'Mallipo Beachfront Straight (만리포 해수욕장 해변로)' },
+      { id: 2, name: 'Anmyeondo Coastal Pine Bend (안면도 해송 숲길)' },
+      { id: 3, name: 'Taean Cliff & Lighthouse Ridge (해안 절벽 & 등대 전망대)' },
+      { id: 4, name: 'Kkotji Sea Stacks Overlook (꽃지 할미·할아비 바위길)' },
+      { id: 5, name: 'West Sea Mudflat & Salt Pan Curve (서해 갯벌 & 천일염 염전)' },
+      { id: 6, name: 'Sunset Promenade Return (서해 해넘이 피니시)' },
+    ],
+  },
+  {
     id: 'hallasan',
     name: 'Jeju Mt. Hallasan',
     nameKr: '제주 한라산 1100 도로',
@@ -207,8 +231,8 @@ function buildSplineDataFromControlPoints(def, controlPoints, startFinishIdx = 0
     id: def.id,
     name: def.name,
     is_closed_periodic_loop: true,
-    track_width_m: def.id === 'countryside' ? 0.024 : (def.id === 'hallasan' ? 0.023 : 0.022),
-    curb_width_m: def.id === 'countryside' ? 0.0028 : (def.id === 'hallasan' ? 0.0026 : 0.0025),
+    track_width_m: def.id === 'countryside' ? 0.024 : (def.id === 'hallasan' || def.id === 'taean' ? 0.0235 : 0.022),
+    curb_width_m: def.id === 'countryside' ? 0.0028 : (def.id === 'hallasan' || def.id === 'taean' ? 0.0026 : 0.0025),
     rail_height_m: 0.0035,
     total_length_m: Number(totalLength.toFixed(4)),
     scale_equivalent_length_m: Number((totalLength * 87.0).toFixed(1)),
@@ -369,8 +393,44 @@ const HALLASAN_CONTROL_POINTS = [
 ];
 
 /**
+ * Control points for Taean West Coast: Mallipo beach, Anmyeondo pines, Kkotji sea stacks & salt pans
+ * Format: [x, y, z, bank_deg, sector_id]
+ */
+const TAEAN_CONTROL_POINTS = [
+  // Sector 6 -> Sector 1: Mallipo Beachfront Boardwalk Straight & Start Line
+  [0.06, 0.017, 0.238, 0.0, 6],
+  [-0.08, 0.017, 0.238, 0.0, 1],
+  [-0.22, 0.018, 0.232, 4.0, 1],
+
+  // Sector 2: Anmyeondo Coastal Pine Bend
+  [-0.34, 0.024, 0.205, 10.0, 2],
+  [-0.43, 0.032, 0.140, 12.0, 2],
+  [-0.46, 0.042, 0.055, 8.0, 2],
+
+  // Sector 3: Taean Cliff & Lighthouse Ridge
+  [-0.43, 0.050, -0.040, -10.0, 3],
+  [-0.34, 0.056, -0.120, -14.0, 3],
+  [-0.21, 0.060, -0.158, 8.0, 3],
+
+  // Sector 4: Kkotji Halmi & Harabi Sea Stacks Overlook
+  [-0.07, 0.062, -0.165, 10.0, 4],
+  [0.08, 0.058, -0.155, -8.0, 4],
+  [0.22, 0.052, -0.135, 12.0, 4],
+
+  // Sector 5: West Sea Mudflat & Taean Salt Pan Curve
+  [0.34, 0.044, -0.090, 15.0, 5],
+  [0.43, 0.034, -0.015, -12.0, 5],
+  [0.45, 0.026, 0.075, 14.0, 5],
+
+  // Sector 6: Sunset Promenade Return to Start
+  [0.40, 0.021, 0.160, 10.0, 6],
+  [0.31, 0.018, 0.215, 6.0, 6],
+  [0.19, 0.017, 0.236, 2.0, 6],
+];
+
+/**
  * Returns the splineData object for the requested track ID.
- * @param {string} trackId - 'hallasan', 'classic', 'gymkhana', 'infinity', or 'countryside'
+ * @param {string} trackId - 'taean', 'hallasan', 'classic', 'gymkhana', 'infinity', or 'countryside'
  * @param {object} defaultClassicSpline - Pre-loaded track_spline.json if available
  */
 export function getTrackSplineData(trackId, defaultClassicSpline = null) {
@@ -390,6 +450,12 @@ export function getTrackSplineData(trackId, defaultClassicSpline = null) {
   }
 
   const def = TRACK_DEFINITIONS.find((t) => t.id === trackId) || TRACK_DEFINITIONS[0];
+
+  if (trackId === 'taean') {
+    const generated = buildSplineDataFromControlPoints(def, TAEAN_CONTROL_POINTS, 0, 1);
+    splineCache.set('taean', generated);
+    return generated;
+  }
 
   if (trackId === 'hallasan') {
     const generated = buildSplineDataFromControlPoints(def, HALLASAN_CONTROL_POINTS, 0, 1);

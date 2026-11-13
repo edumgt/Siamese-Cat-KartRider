@@ -5,6 +5,7 @@ import {
 } from './ProceduralTextures.js';
 import { buildCountrysideScenery } from './CountrysideSceneryBuilder.js';
 import { buildJejuHallasanScenery } from './JejuHallasanSceneryBuilder.js';
+import { buildTaeanCoastScenery } from './TaeanCoastSceneryBuilder.js';
 
 let cachedSplineSamples = null;
 let cachedV4TrackTextures = null;
@@ -791,6 +792,7 @@ export function buildCoasterTrack(splineData) {
 
   const isCountryside = splineData && splineData.id === 'countryside';
   const isHallasan = splineData && splineData.id === 'hallasan';
+  const isTaean = splineData && splineData.id === 'taean';
 
   let redColor = new THREE.Color(0xe8251a);
   let whiteColor = new THREE.Color(0xf5f7fa);
@@ -804,6 +806,10 @@ export function buildCoasterTrack(splineData) {
     redColor = new THREE.Color(0xff7200); // Vivid Jeju Tangerine Orange
     whiteColor = new THREE.Color(0x24272c); // Deep Porous Volcanic Basalt
     silverRailColor = new THREE.Color(0x424852); // Basalt rock rail
+  } else if (isTaean) {
+    redColor = new THREE.Color(0x00a8b5); // West Sea Coastal Teal
+    whiteColor = new THREE.Color(0xf7ead4); // Warm Mallipo Beach Sand Cream
+    silverRailColor = new THREE.Color(0x6e5d4f); // Weathered Coastal Boardwalk Driftwood
   }
 
   let cVertOffset = 0;
@@ -1595,6 +1601,11 @@ export function buildCoasterTrack(splineData) {
     const hallasanScenery = buildJejuHallasanScenery(splineData);
     trackGroup.add(hallasanScenery);
     trackGroup.userData.hallasanScenery = hallasanScenery;
+  }
+  if (splineData && splineData.id === 'taean') {
+    const taeanScenery = buildTaeanCoastScenery(splineData);
+    trackGroup.add(taeanScenery);
+    trackGroup.userData.taeanScenery = taeanScenery;
   }
 
   return {

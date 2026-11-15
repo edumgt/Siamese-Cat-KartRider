@@ -322,6 +322,24 @@ async function initApp() {
   const ghostSystem = createGhostSystem(ghostKart, splineData.total_length_m || 3.8371, activeTrackId);
   let trackGlbScene = null;
 
+  // Pre-allocated 3D Coordinate Replay Trajectory Ribbon (shown during dedicated Ghost Replay Mode)
+  const MAX_REPLAY_TRAIL_PTS = 5400;
+  const replayTrailPositions = new Float32Array(MAX_REPLAY_TRAIL_PTS * 3);
+  const replayTrailGeo = new THREE.BufferGeometry();
+  replayTrailGeo.setAttribute('position', new THREE.BufferAttribute(replayTrailPositions, 3));
+  replayTrailGeo.setDrawRange(0, 0);
+  const replayTrailMat = new THREE.LineBasicMaterial({
+    color: 0x00f0ff,
+    transparent: true,
+    opacity: 0.72,
+    depthWrite: false,
+  });
+  const replayTrailLine = new THREE.Line(replayTrailGeo, replayTrailMat);
+  replayTrailLine.name = 'GhostReplayCoordinateTrail';
+  replayTrailLine.visible = false;
+  replayTrailLine.frustumCulled = false;
+  scene.add(replayTrailLine);
+
   // Dedicated post-Bokeh scene for 3D Drift & Boost Sparks so airborne sparks
   // flying off the edge of the track in front of distant background walls use
   // their OWN 3D view-space depth (mvPosition.z) rather than being blurred by
@@ -1997,8 +2015,13 @@ async function initApp() {
       radarCtx.drawImage(radarBgCanvas, 0, 0);
     }
 
-    // Draw Holographic Ghost Car Radar Blip if active
-    if (ghostSystem && ghostSystem.isEnabled && ghostSystem.currentGhostPose) {
+    // Draw Holographic Ghost Car Radar Blip if active (skip duplicate ring when Ghost IS the camera subject in Replay Mode)
+    if (
+      ghostSystem &&
+      !ghostSystem.isReplayActive() &&
+      ghostSystem.isEnabled &&
+      ghostSystem.currentGhostPose
+    ) {
       const gp = ghostSystem.currentGhostPose.position;
       const gx = mapMinimapX(gp.x, gp.y, gp.z);
       const gy = mapMinimapY(gp.x, gp.y, gp.z);
@@ -2174,6 +2197,9 @@ async function initApp() {
         elFinishGhost.classList.add('hidden');
       }
     }
+    if (typeof syncReplayAvailabilityButtons === 'function') {
+      syncReplayAvailabilityButtons();
+    }
     if (elFinishOverlay) {
       elFinishOverlay.classList.remove('hidden');
     }
@@ -2191,21 +2217,31 @@ async function initApp() {
   }
 
   physics.onLapComplete((lapTime, bestLap, completedLapNum, totalTime, isFinish) => {
-    const ghostRes = ghostSystem.onLapComplete(lapTime);
+    const vehicleMeta = {
+      vehicleMode: activeVehicleMode,
+      characterId: activeCharacterId,
+    };
+    const ghostRes = ghostSystem.onLapComplete(lapTime, vehicleMeta);
     if (isFinish) {
       const finalTotal =
         totalTime ?? physics.state.finishTotalTime ?? physics.state.totalRaceTime ?? lapTime;
+      ghostSystem.onRaceComplete(finalTotal, vehicleMeta);
       showFinishOverlay(finalTotal, bestLap ?? lapTime, true, ghostRes);
     } else {
       audioSynth.playLapChime();
       const lapNum = completedLapNum || Math.max(1, (physics.state.lapCount || 2) - 1);
       showLapSplit(lapNum, lapTime, ghostRes);
     }
+    if (typeof syncReplayAvailabilityButtons === 'function') {
+      syncReplayAvailabilityButtons();
+    }
   });
 
   if (physics.onRaceFinish) {
     physics.onRaceFinish((totalTime, _lapTimes, bestLap) => {
-      showFinishOverlay(totalTime, bestLap, true);
+      if (!finishOverlayShown) {
+        showFinishOverlay(totalTime, bestLap, true);
+      }
     });
   }
 
@@ -2538,6 +2574,9 @@ async function initApp() {
   syncMobileTouchControlsVisibility();
 
   function showWelcomeDialog() {
+    if (typeof syncReplayAvailabilityButtons === 'function') {
+      syncReplayAvailabilityButtons();
+    }
     if (elWelcomeOverlay) {
       elWelcomeOverlay.classList.remove('hidden');
       focusWelcomeStartButton();
@@ -2567,6 +2606,14 @@ async function initApp() {
   }
 
   function dismissWelcomeAndStartRace() {
+    if (ghostSystem.isReplayActive()) {
+      exitGhostReplay();
+    } else {
+      ghostSystem.snapshotCurrentRun({
+        vehicleMode: activeVehicleMode,
+        characterId: activeCharacterId,
+      });
+    }
     if (audioSynth.setEnabled && !audioSynth.isEnabled?.()) {
       const on = audioSynth.setEnabled(true);
       updateAudioButtonUI(on);
@@ -2580,7 +2627,7 @@ async function initApp() {
     hideWelcomeDialog();
     hideFinishOverlay();
     hideLapSplit();
-    ghostSystem.resetCurrentLapRecording();
+    ghostSystem.resetAllRecordings();
     startF1StartCountdown();
   }
 
@@ -2743,6 +2790,11 @@ async function initApp() {
     // Update Rapier world and vehicle spline solver
     physics.setTrackSpline(newSplineData, coaster.roadGeo);
 
+    // Exit active replay cleanly before rebuilding track
+    if (ghostSystem.isReplayActive()) {
+      exitGhostReplay();
+    }
+
     // Switch Ghost Car system to track-specific recording and ghost model
     const trackBestLap = ghostSystem.setTrack(newTrackId, newSplineData.total_length_m);
 
@@ -2766,6 +2818,9 @@ async function initApp() {
 
     cancelF1StartCountdown();
     updateTrackUiElements(curDef, trackBestLap);
+    if (typeof syncReplayAvailabilityButtons === 'function') {
+      syncReplayAvailabilityButtons();
+    }
   }
 
   // Bind Welcome Dialog track selection cards
@@ -3033,10 +3088,269 @@ async function initApp() {
     });
   }
 
-  // Initial UI sync for active track, character, and ride mode
+  // -------------------------------------------------------------------------
+  // GHOST RACE REPLAY CONTROLLER & UI DOCK
+  // -------------------------------------------------------------------------
+  const btnWatchReplay = document.getElementById('btn-watch-replay');
+  const btnWelcomeReplay = document.getElementById('btn-welcome-replay');
+  const btnFinishReplay = document.getElementById('btn-finish-replay');
+  const elReplayDock = document.getElementById('replay-control-dock');
+  const btnReplaySrcRun = document.getElementById('btn-replay-src-run');
+  const btnReplaySrcBest = document.getElementById('btn-replay-src-best');
+  const elReplayCoordReadout = document.getElementById('replay-coord-readout');
+  const btnReplayPlayPause = document.getElementById('btn-replay-playpause');
+  const elReplayPlayPauseLabel = document.getElementById('replay-playpause-label');
+  const btnReplayRestart = document.getElementById('btn-replay-restart');
+  const elReplayScrubber = document.getElementById('replay-scrubber');
+  const elReplayTimeReadout = document.getElementById('replay-time-readout');
+  const btnReplayRate = document.getElementById('btn-replay-rate');
+  const btnReplayClear = document.getElementById('btn-replay-clear');
+  const btnReplayExit = document.getElementById('btn-replay-exit');
+
+  let isScrubbingReplay = false;
+  let lastReplayAvailable = null;
+  let lastReplayTimeStr = '';
+  let lastReplayCoordStr = '';
+
+  function refreshReplayTrailGeometry() {
+    const frames = ghostSystem.getReplayTrailFrames();
+    if (!frames || frames.length < 2) {
+      replayTrailLine.visible = false;
+      replayTrailGeo.setDrawRange(0, 0);
+      return;
+    }
+    const count = Math.min(frames.length, MAX_REPLAY_TRAIL_PTS);
+    for (let i = 0; i < count; i++) {
+      const p = frames[i].p;
+      replayTrailPositions[i * 3 + 0] = p[0];
+      replayTrailPositions[i * 3 + 1] = p[1] + 0.0006;
+      replayTrailPositions[i * 3 + 2] = p[2];
+    }
+    replayTrailGeo.attributes.position.needsUpdate = true;
+    replayTrailGeo.setDrawRange(0, count);
+    replayTrailLine.visible = true;
+  }
+
+  function syncReplayAvailabilityButtons() {
+    const avail = ghostSystem.hasAnyReplay();
+    const isReplaying = ghostSystem.isReplayActive();
+
+    if (btnWatchReplay) {
+      btnWatchReplay.classList.toggle('is-disabled', !avail && !isReplaying);
+      btnWatchReplay.classList.toggle('active', avail && !isReplaying);
+      btnWatchReplay.classList.toggle('is-replaying', isReplaying);
+      btnWatchReplay.title = isReplaying
+        ? 'Exit Ghost Replay (B / Esc)'
+        : avail
+          ? 'Watch Ghost Replay (B)'
+          : 'Drive on track to record Ghost Replay (B)';
+    }
+    if (btnWelcomeReplay) {
+      btnWelcomeReplay.classList.toggle('hidden', !avail);
+    }
+    if (btnFinishReplay) {
+      btnFinishReplay.classList.toggle('hidden', !avail);
+    }
+  }
+
+  function syncReplayDockUI(status = ghostSystem.getReplayStatus()) {
+    const isAct = Boolean(status && status.active);
+    if (elReplayDock) {
+      elReplayDock.classList.toggle('hidden', !isAct);
+    }
+    if (isAct && status) {
+      if (elReplayPlayPauseLabel) {
+        elReplayPlayPauseLabel.textContent = status.playing ? 'PAUSE' : 'PLAY';
+      }
+      if (btnReplayRate) {
+        btnReplayRate.textContent = `${status.playbackRate.toFixed(1)}×`;
+      }
+      if (btnReplaySrcRun) {
+        btnReplaySrcRun.disabled = !status.hasLastRun;
+        btnReplaySrcRun.classList.toggle('active', status.source === 'run');
+      }
+      if (btnReplaySrcBest) {
+        btnReplaySrcBest.disabled = !status.hasBestLap;
+        btnReplaySrcBest.classList.toggle('active', status.source === 'best');
+      }
+      if (!isScrubbingReplay && elReplayScrubber) {
+        const frac = status.duration > 0.01 ? status.currentTime / status.duration : 0;
+        elReplayScrubber.value = String(Math.round(THREE.MathUtils.clamp(frac, 0, 1) * 1000));
+      }
+      if (elReplayTimeReadout) {
+        const timeText = `${formatLapTimerMMSSCC(status.currentTime)} / ${formatLapTimerMMSSCC(status.duration)}`;
+        if (timeText !== lastReplayTimeStr) {
+          lastReplayTimeStr = timeText;
+          elReplayTimeReadout.textContent = timeText;
+        }
+      }
+    }
+    syncReplayAvailabilityButtons();
+  }
+
+  function enterGhostReplay(preferredSource = 'auto') {
+    hideWelcomeDialog();
+    hideFinishOverlay();
+    hideLapSplit();
+    closeTrackModal();
+    closeCharacterModal();
+    cancelF1StartCountdown();
+
+    const started = ghostSystem.startReplay(preferredSource, {
+      vehicleMode: activeVehicleMode,
+      characterId: activeCharacterId,
+    });
+    if (!started) {
+      syncReplayAvailabilityButtons();
+      return false;
+    }
+
+    microKart.kartRoot.visible = false;
+    if (microKart.sparkPoints) {
+      microKart.sparkPoints.visible = false;
+    }
+    if (driftParticles && driftParticles.reset) {
+      driftParticles.reset();
+    }
+    refreshReplayTrailGeometry();
+    syncReplayDockUI();
+    return true;
+  }
+
+  function exitGhostReplay() {
+    if (!ghostSystem.isReplayActive()) return;
+    ghostSystem.stopReplay();
+    replayTrailLine.visible = false;
+    microKart.kartRoot.visible = true;
+    if (microKart.sparkPoints) {
+      microKart.sparkPoints.visible = true;
+    }
+    if (ghostKart.setVehicleMode) {
+      ghostKart.setVehicleMode(activeVehicleMode);
+    }
+    if (ghostKart.setDriverCharacter) {
+      ghostKart.setDriverCharacter(activeCharacterId);
+    }
+    syncReplayDockUI();
+  }
+
+  ghostSystem.onReplayStateChange((status) => {
+    syncReplayDockUI(status);
+  });
+
+  if (btnWatchReplay) {
+    btnWatchReplay.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (ghostSystem.isReplayActive()) {
+        exitGhostReplay();
+      } else {
+        enterGhostReplay('auto');
+      }
+      btnWatchReplay.blur();
+    });
+  }
+
+  if (btnWelcomeReplay) {
+    btnWelcomeReplay.addEventListener('click', (e) => {
+      e.stopPropagation();
+      enterGhostReplay('auto');
+      btnWelcomeReplay.blur();
+    });
+  }
+
+  if (btnFinishReplay) {
+    btnFinishReplay.addEventListener('click', (e) => {
+      e.stopPropagation();
+      enterGhostReplay('run');
+      btnFinishReplay.blur();
+    });
+  }
+
+  if (btnReplayPlayPause) {
+    btnReplayPlayPause.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ghostSystem.toggleReplayPlaying();
+      btnReplayPlayPause.blur();
+    });
+  }
+
+  if (btnReplayRestart) {
+    btnReplayRestart.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ghostSystem.seekReplay(0.0);
+      ghostSystem.setReplayPlaying(true);
+      btnReplayRestart.blur();
+    });
+  }
+
+  if (elReplayScrubber) {
+    elReplayScrubber.addEventListener('pointerdown', () => {
+      isScrubbingReplay = true;
+    });
+    window.addEventListener('pointerup', () => {
+      isScrubbingReplay = false;
+    });
+    elReplayScrubber.addEventListener('input', (e) => {
+      const st = ghostSystem.getReplayStatus();
+      const frac = Number(e.target.value) / 1000;
+      ghostSystem.seekReplay(frac * st.duration);
+    });
+  }
+
+  if (btnReplayRate) {
+    btnReplayRate.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const curRate = ghostSystem.getReplayStatus().playbackRate;
+      const nextRate = curRate >= 1.9 ? 0.5 : curRate < 0.9 ? 1.0 : 2.0;
+      ghostSystem.setReplayRate(nextRate);
+      btnReplayRate.blur();
+    });
+  }
+
+  if (btnReplaySrcRun) {
+    btnReplaySrcRun.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (ghostSystem.setReplaySource('run')) {
+        refreshReplayTrailGeometry();
+      }
+      btnReplaySrcRun.blur();
+    });
+  }
+
+  if (btnReplaySrcBest) {
+    btnReplaySrcBest.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (ghostSystem.setReplaySource('best')) {
+        refreshReplayTrailGeometry();
+      }
+      btnReplaySrcBest.blur();
+    });
+  }
+
+  if (btnReplayClear) {
+    btnReplayClear.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ghostSystem.clearGhostRecord();
+      exitGhostReplay();
+      updateTrackUiElements(getTrackDefinition(activeTrackId), null);
+      syncReplayAvailabilityButtons();
+      btnReplayClear.blur();
+    });
+  }
+
+  if (btnReplayExit) {
+    btnReplayExit.addEventListener('click', (e) => {
+      e.stopPropagation();
+      exitGhostReplay();
+      btnReplayExit.blur();
+    });
+  }
+
+  // Initial UI sync for active track, character, ride mode, and replay availability
   updateTrackUiElements(getTrackDefinition(activeTrackId), ghostSystem.getBestLapTime());
   updateCharacterUiElements(getCharacterDefinition(activeCharacterId));
   syncVehicleModeUi();
+  syncReplayAvailabilityButtons();
 
   if (btnFinishRaceAgain) {
     btnFinishRaceAgain.addEventListener('click', (e) => {
@@ -3049,11 +3363,14 @@ async function initApp() {
   if (btnFinishAutopilot) {
     btnFinishAutopilot.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (ghostSystem.isReplayActive()) {
+        exitGhostReplay();
+      }
       hideWelcomeDialog();
       hideFinishOverlay();
       hideLapSplit();
       cancelF1StartCountdown();
-      ghostSystem.resetCurrentLapRecording();
+      ghostSystem.resetAllRecordings();
       physics.setAutopilot(true);
       btnFinishAutopilot.blur();
     });
@@ -3068,7 +3385,17 @@ async function initApp() {
   window.addEventListener('keydown', (e) => {
     if (e.target && ['INPUT', 'TEXTAREA'].includes(e.target.tagName) && !e.target.readOnly) return;
     if (e.repeat) return;
-    if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.key === 'Enter') {
+    if (e.code === 'Space' && ghostSystem.isReplayActive()) {
+      e.preventDefault();
+      ghostSystem.toggleReplayPlaying();
+    } else if (e.code === 'KeyB') {
+      e.preventDefault();
+      if (ghostSystem.isReplayActive()) {
+        exitGhostReplay();
+      } else {
+        enterGhostReplay('auto');
+      }
+    } else if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.key === 'Enter') {
       e.preventDefault();
       dismissWelcomeAndStartRace();
     } else if (
@@ -3096,8 +3423,13 @@ async function initApp() {
         openCharacterModal();
       }
     } else if (e.code === 'KeyV') {
-      switchVehicleMode(activeVehicleMode === 'mtb' ? 'kart' : 'mtb', true);
+      if (!ghostSystem.isReplayActive()) {
+        switchVehicleMode(activeVehicleMode === 'mtb' ? 'kart' : 'mtb', true);
+      }
     } else if (e.code === 'Escape') {
+      if (ghostSystem.isReplayActive()) {
+        exitGhostReplay();
+      }
       if (elTrackDialogOverlay && !elTrackDialogOverlay.classList.contains('hidden')) {
         closeTrackModal();
       }
@@ -3105,17 +3437,29 @@ async function initApp() {
         closeCharacterModal();
       }
     } else if (e.code === 'KeyR') {
-      hideWelcomeDialog();
-      hideFinishOverlay();
-      hideLapSplit();
-      cancelF1StartCountdown();
-      ghostSystem.resetCurrentLapRecording();
+      if (ghostSystem.isReplayActive()) {
+        ghostSystem.seekReplay(0.0);
+        ghostSystem.setReplayPlaying(true);
+      } else {
+        ghostSystem.snapshotCurrentRun({
+          vehicleMode: activeVehicleMode,
+          characterId: activeCharacterId,
+        });
+        hideWelcomeDialog();
+        hideFinishOverlay();
+        hideLapSplit();
+        cancelF1StartCountdown();
+        ghostSystem.resetAllRecordings();
+      }
     } else if (e.code === 'KeyP') {
+      if (ghostSystem.isReplayActive()) {
+        exitGhostReplay();
+      }
       hideWelcomeDialog();
       hideFinishOverlay();
       hideLapSplit();
       cancelF1StartCountdown();
-      ghostSystem.resetCurrentLapRecording();
+      ghostSystem.resetAllRecordings();
     }
   });
 
@@ -3202,7 +3546,9 @@ async function initApp() {
     // Ghost Car Reference Time & Live Time Delta
     if (elGhostTime) {
       let gTimeStr = '--:--.--';
-      if (!ghostSystem.isEnabled) {
+      if (ghostSystem.isReplayActive()) {
+        gTimeStr = 'REPLAY MODE';
+      } else if (!ghostSystem.isEnabled) {
         gTimeStr = 'GHOST OFF';
       } else if (ghostSystem.hasGhost()) {
         gTimeStr = formatLapTimerMMSSCC(ghostSystem.getBestLapTime());
@@ -3415,18 +3761,59 @@ async function initApp() {
     // 0. Step Formula 1 5-Light Start Countdown if active
     stepF1StartCountdown(isScreenshotMode ? 0.0 : dt);
 
-    // 1. Step 60FPS Rapier3D + Banked Coaster Spline Physics
-    const st = physics.stepPhysics(dt);
+    let st;
+    if (ghostSystem.isReplayActive()) {
+      // Replay Mode: Step interpolated recorded coordinates onto Ghost Car
+      st = ghostSystem.stepReplay(dt, elapsedTime, activeCameraMode === 2) || physics.state;
+      microKart.kartRoot.visible = false;
+      driftParticles.update(dt, ghostKart.ghostRoot, st);
 
-    // 1b. Step Ghost Car Keyframe Recording, Playback, Visuals & Delta
-    ghostSystem.update(dt, elapsedTime, st);
+      const rStatus = ghostSystem.getReplayStatus();
+      if (!isScrubbingReplay && elReplayScrubber) {
+        const frac = rStatus.duration > 0.01 ? rStatus.currentTime / rStatus.duration : 0;
+        elReplayScrubber.value = String(Math.round(THREE.MathUtils.clamp(frac, 0, 1) * 1000));
+      }
+      if (elReplayTimeReadout) {
+        const timeText = `${formatLapTimerMMSSCC(rStatus.currentTime)} / ${formatLapTimerMMSSCC(rStatus.duration)}`;
+        if (timeText !== lastReplayTimeStr) {
+          lastReplayTimeStr = timeText;
+          elReplayTimeReadout.textContent = timeText;
+        }
+      }
+      if (elReplayCoordReadout) {
+        const xMm = (st.position.x * 1000).toFixed(1);
+        const yMm = (st.position.y * 1000).toFixed(1);
+        const zMm = (st.position.z * 1000).toFixed(1);
+        const coordText = `XYZ: ${xMm}, ${yMm}, ${zMm} mm`;
+        if (coordText !== lastReplayCoordStr) {
+          lastReplayCoordStr = coordText;
+          elReplayCoordReadout.textContent = coordText;
+        }
+      }
+    } else {
+      // 1. Step 60FPS Rapier3D + Banked Coaster Spline Physics
+      st = physics.stepPhysics(dt);
+      microKart.kartRoot.visible = true;
 
-    // 2. Sync 1:87 Micro-Kart Transform, Wheels, Helmeted Driver & Drift Sparks
-    microKart.kartRoot.position.copy(st.position);
-    microKart.kartRoot.quaternion.copy(st.quaternion);
-    microKart.updateWheels(dt, st.speed, st.steerAngle);
-    microKart.updateKartVisuals(dt, st);
-    driftParticles.update(dt, microKart.kartRoot, st);
+      // 1b. Step Ghost Car Keyframe Recording, Playback, Visuals & Delta
+      ghostSystem.update(dt, elapsedTime, st, {
+        vehicleMode: activeVehicleMode,
+        characterId: activeCharacterId,
+      });
+
+      const availNow = ghostSystem.hasAnyReplay();
+      if (availNow !== lastReplayAvailable) {
+        lastReplayAvailable = availNow;
+        syncReplayAvailabilityButtons();
+      }
+
+      // 2. Sync 1:87 Micro-Kart Transform, Wheels, Helmeted Driver & Drift Sparks
+      microKart.kartRoot.position.copy(st.position);
+      microKart.kartRoot.quaternion.copy(st.quaternion);
+      microKart.updateWheels(dt, st.speed, st.steerAngle);
+      microKart.updateKartVisuals(dt, st);
+      driftParticles.update(dt, microKart.kartRoot, st);
+    }
 
     // 3. Update Warm Night-Time Lamp Key Lighting, Under-Track Orange/Purple/Blue LEDs & #1E6BFF Mic Aura
     atmosphere.updateAtmosphere(elapsedTime, settings, renderer, bloomPass, scene, diorama);

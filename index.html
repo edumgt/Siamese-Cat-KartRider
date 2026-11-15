@@ -113,6 +113,21 @@
               </svg>
             </button>
 
+            <!-- Top-Right Race Replay Button (B) -->
+            <button
+              id="btn-watch-replay"
+              class="hud-mute-btn hud-replay-btn is-disabled"
+              type="button"
+              aria-label="Watch Ghost Replay (B)"
+              title="Watch Ghost Replay (B)"
+            >
+              <svg class="mute-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
+                <path d="M3 3v5h5"></path>
+                <polygon points="10 8.5 16 12 10 15.5 10 8.5" fill="currentColor" stroke="none"></polygon>
+              </svg>
+            </button>
+
             <!-- Top-Right Mute / Unmute Sound Icon Button -->
             <button
               id="btn-mute-sound"
@@ -371,6 +386,10 @@
                 <span id="welcome-btn-progress-fill" class="welcome-btn-progress-fill"></span>
               </span>
             </button>
+            <button id="btn-welcome-replay" class="welcome-start-btn finish-action-btn finish-change-track-btn hidden" type="button">
+              <span class="welcome-start-text">WATCH REPLAY</span>
+              <kbd class="welcome-enter-kbd">B</kbd>
+            </button>
           </div>
         </div>
       </div>
@@ -449,6 +468,10 @@
               <span class="welcome-start-text">RACE AGAIN</span>
               <kbd class="welcome-enter-kbd">ENTER ↵</kbd>
             </button>
+            <button id="btn-finish-replay" class="welcome-start-btn finish-action-btn finish-change-track-btn hidden" type="button">
+              <span class="welcome-start-text">WATCH REPLAY</span>
+              <kbd class="welcome-enter-kbd">B</kbd>
+            </button>
             <button id="btn-finish-change-driver" class="welcome-start-btn finish-action-btn finish-change-track-btn" type="button">
               <span class="welcome-start-text">SELECT DRIVER</span>
               <kbd class="welcome-enter-kbd">C</kbd>
@@ -462,6 +485,45 @@
               <kbd class="welcome-enter-kbd">P</kbd>
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- Compact Bottom-Center Race Replay Dock (Visible only during Ghost Replay Mode) -->
+      <div id="replay-control-dock" class="replay-control-dock hidden" role="region" aria-label="Ghost Race Replay Controls">
+        <div class="replay-dock-top">
+          <div class="replay-dock-title-group">
+            <span class="replay-badge-tag">GHOST REPLAY</span>
+            <div class="replay-source-tabs">
+              <button id="btn-replay-src-run" class="replay-src-btn active" type="button">FULL RUN</button>
+              <button id="btn-replay-src-best" class="replay-src-btn" type="button">BEST LAP</button>
+            </div>
+          </div>
+          <div id="replay-coord-readout" class="replay-coord-readout" title="Recorded 3D Movement Coordinates">
+            XYZ: +0.0, +35.0, +255.0 mm
+          </div>
+        </div>
+
+        <div class="replay-dock-controls">
+          <button id="btn-replay-playpause" class="replay-icon-btn" type="button" title="Play / Pause (Space)" aria-label="Play or Pause Replay">
+            <span id="replay-playpause-label">PAUSE</span>
+          </button>
+          <button id="btn-replay-restart" class="replay-icon-btn" type="button" title="Restart Replay" aria-label="Restart Replay">
+            <span>↺ 0s</span>
+          </button>
+          <input
+            id="replay-scrubber"
+            class="replay-scrubber"
+            type="range"
+            min="0"
+            max="1000"
+            value="0"
+            step="1"
+            aria-label="Replay Timeline Scrubber"
+          />
+          <span id="replay-time-readout" class="replay-time-readout">00:00.00 / 00:00.00</span>
+          <button id="btn-replay-rate" class="replay-icon-btn replay-rate-btn" type="button" title="Playback Speed">1.0×</button>
+          <button id="btn-replay-clear" class="replay-icon-btn replay-clear-btn" type="button" title="Clear Saved Replay for This Track">CLEAR</button>
+          <button id="btn-replay-exit" class="replay-icon-btn replay-exit-btn" type="button" title="Exit Replay (Esc / B)">EXIT ESC</button>
         </div>
       </div>
 

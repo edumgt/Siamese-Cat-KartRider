@@ -402,7 +402,8 @@ body {
   display: none !important;
 }
 
-.hud-ghost-btn.active {
+.hud-ghost-btn.active,
+.hud-replay-btn.active {
   color: #00e5ff;
   border-color: #00e5ff;
   box-shadow:
@@ -410,7 +411,17 @@ body {
     0 3px 10px rgba(0, 0, 0, 0.88);
 }
 
-.hud-ghost-btn.is-disabled {
+.hud-replay-btn.is-replaying {
+  background: rgba(0, 229, 255, 0.24);
+  color: #ffffff;
+  border-color: #00e5ff;
+  box-shadow:
+    0 0 18px rgba(0, 229, 255, 0.72),
+    0 3px 10px rgba(0, 0, 0, 0.90);
+}
+
+.hud-ghost-btn.is-disabled,
+.hud-replay-btn.is-disabled {
   color: rgba(255, 255, 255, 0.35);
   border-color: rgba(255, 255, 255, 0.18);
   opacity: 0.65;
@@ -802,6 +813,13 @@ body {
 .welcome-footer-row {
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.welcome-footer-row .hidden {
+  display: none !important;
 }
 
 .welcome-start-btn {
@@ -2252,4 +2270,191 @@ body {
   background: rgba(255, 170, 68, 0.22);
   border: 1px solid rgba(255, 170, 68, 0.65);
   color: #ffd27d;
+}
+
+/* =========================================================================
+   GHOST RACE REPLAY CONTROL DOCK (BOTTOM-CENTER COMPACT HUD)
+   ========================================================================= */
+.replay-control-dock {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(620px, calc(100vw - 28px));
+  z-index: 48;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(6, 12, 24, 0.92);
+  border: 1.5px solid rgba(0, 229, 255, 0.55);
+  border-radius: 10px;
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.88),
+    0 0 24px rgba(0, 229, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.replay-control-dock.hidden {
+  display: none !important;
+}
+
+.replay-dock-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.replay-dock-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.replay-badge-tag {
+  font-family: 'Orbitron', sans-serif;
+  font-style: italic;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #06101b;
+  background: #00e5ff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+}
+
+.replay-source-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.replay-src-btn {
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 2px 8px;
+  font-family: 'Orbitron', sans-serif;
+  font-style: italic;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: rgba(200, 232, 250, 0.72);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  transition: all 0.14s ease;
+}
+
+.replay-src-btn:hover:not(:disabled) {
+  color: #ffffff;
+  border-color: rgba(0, 229, 255, 0.65);
+}
+
+.replay-src-btn.active {
+  color: #00e5ff;
+  background: rgba(0, 229, 255, 0.16);
+  border-color: #00e5ff;
+}
+
+.replay-src-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.replay-coord-readout {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #9beeff;
+  font-variant-numeric: tabular-nums;
+}
+
+.replay-dock-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.replay-icon-btn {
+  pointer-events: auto;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 5px 9px;
+  background: rgba(14, 24, 44, 0.88);
+  border: 1px solid rgba(0, 229, 255, 0.42);
+  border-radius: 5px;
+  font-family: 'Orbitron', sans-serif;
+  font-style: italic;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #dff8ff;
+  transition: all 0.14s ease;
+}
+
+.replay-icon-btn:hover {
+  background: rgba(0, 229, 255, 0.22);
+  border-color: #00e5ff;
+  color: #ffffff;
+}
+
+.replay-scrubber {
+  flex: 1;
+  min-width: 90px;
+  height: 5px;
+  accent-color: #00e5ff;
+  cursor: pointer;
+}
+
+.replay-time-readout {
+  flex-shrink: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+
+.replay-clear-btn {
+  border-color: rgba(255, 110, 98, 0.45);
+  color: #ffb0a8;
+}
+
+.replay-clear-btn:hover {
+  background: rgba(255, 89, 89, 0.24);
+  border-color: #ff6b6b;
+  color: #ffffff;
+}
+
+.replay-exit-btn {
+  border-color: rgba(255, 190, 85, 0.55);
+  color: #ffd27d;
+}
+
+.replay-exit-btn:hover {
+  background: rgba(255, 170, 68, 0.24);
+  border-color: #ffd27d;
+  color: #ffffff;
+}
+
+@media (max-width: 768px) {
+  .replay-control-dock {
+    bottom: 14px;
+    padding: 8px 10px;
+  }
+
+  .replay-dock-controls {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .replay-scrubber {
+    order: -1;
+    flex-basis: 100%;
+  }
 }

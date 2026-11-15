@@ -243,6 +243,11 @@ async function initApp() {
     activeCharacterId = 'siamese';
   }
 
+  let activeVehicleMode = localStorage.getItem('desk_racer_vehicle_mode') || 'kart';
+  if (activeVehicleMode !== 'kart' && activeVehicleMode !== 'mtb') {
+    activeVehicleMode = 'kart';
+  }
+
   // Sector lookup map
   const sectorNames = {};
   for (const sec of splineData.sectors || []) {
@@ -284,6 +289,9 @@ async function initApp() {
   } else if (activeTrackId === 'taean') {
     if (scene.fog) scene.fog.color.setHex(0x1e2336);
     scene.background.setHex(0x191f30);
+  } else if (activeTrackId === 'seoraksan') {
+    if (scene.fog) scene.fog.color.setHex(0x222634);
+    scene.background.setHex(0x1d212e);
   }
   scene.add(coaster.trackGroup);
   if (coaster.underTrackLedGroup) {
@@ -293,13 +301,22 @@ async function initApp() {
 
   const microKart = buildMicroKart(activeCharacterId);
   microKart.kartRoot.scale.setScalar(0.38);
+  if (microKart.setVehicleMode) {
+    microKart.setVehicleMode(activeVehicleMode);
+  }
   scene.add(microKart.kartRoot);
 
   const ghostKart = buildGhostKart(activeCharacterId);
   ghostKart.ghostRoot.scale.setScalar(0.38);
+  if (ghostKart.setVehicleMode) {
+    ghostKart.setVehicleMode(activeVehicleMode);
+  }
   scene.add(ghostKart.ghostRoot);
 
   const driftParticles = createKartDriftParticleSystem();
+  if (driftParticles.setVehicleMode) {
+    driftParticles.setVehicleMode(activeVehicleMode);
+  }
   scene.add(driftParticles.group);
 
   const ghostSystem = createGhostSystem(ghostKart, splineData.total_length_m || 3.8371, activeTrackId);
@@ -2130,11 +2147,18 @@ async function initApp() {
     if (finishTrackNameEl) finishTrackNameEl.textContent = `${curDef.name} (${curDef.nameKr})`;
     if (finishTrackIconEl) finishTrackIconEl.textContent = curDef.icon;
 
-    const curCharDef = getCharacterDefinition(activeCharacterId);
     const finishDriverNameEl = document.getElementById('finish-driver-name');
     const finishDriverIconEl = document.getElementById('finish-driver-icon');
-    if (finishDriverNameEl) finishDriverNameEl.textContent = `${curCharDef.name} (${curCharDef.nameKr})`;
-    if (finishDriverIconEl) finishDriverIconEl.textContent = curCharDef.icon;
+    if (activeVehicleMode === 'mtb') {
+      if (finishDriverIconEl) finishDriverIconEl.textContent = '🚵';
+      if (finishDriverNameEl) {
+        finishDriverNameEl.textContent = 'Mountain Bike Rider (설악산 산악자전거 라이더)';
+      }
+    } else {
+      const curCharDef = getCharacterDefinition(activeCharacterId);
+      if (finishDriverNameEl) finishDriverNameEl.textContent = `${curCharDef.name} (${curCharDef.nameKr})`;
+      if (finishDriverIconEl) finishDriverIconEl.textContent = curCharDef.icon;
+    }
     if (elFinishGhost) {
       if (ghostRes && ghostRes.isNewRecord) {
         elFinishGhost.classList.remove('hidden');
@@ -2311,7 +2335,10 @@ async function initApp() {
     if (isCircuitReady) {
       btnWelcomeStart.classList.remove('is-warming-up', 'is-queued');
       if (elWelcomeProgressFill) elWelcomeProgressFill.style.width = '100%';
-      if (elWelcomeStartText) elWelcomeStartText.textContent = 'START TIME TRIAL';
+      if (elWelcomeStartText) {
+        elWelcomeStartText.textContent =
+          activeVehicleMode === 'mtb' ? 'START MTB RIDE' : 'START TIME TRIAL';
+      }
       if (elWelcomeEnterKbd) elWelcomeEnterKbd.textContent = 'ENTER ↵';
       focusWelcomeStartButton();
       return;
@@ -2722,13 +2749,16 @@ async function initApp() {
     // Re-project minimap radar for the new circuit
     initMinimapCanvas(newSplineData);
 
-    // Adjust atmosphere tone for Jeju Mt. Hallasan / Taean West Coast circuits
+    // Adjust atmosphere tone for Jeju Mt. Hallasan / Taean West Coast / Mt. Seoraksan MTB circuits
     if (newTrackId === 'hallasan') {
       if (scene.fog) scene.fog.color.setHex(0x192434);
       scene.background.setHex(0x151f2d);
     } else if (newTrackId === 'taean') {
       if (scene.fog) scene.fog.color.setHex(0x1e2336);
       scene.background.setHex(0x191f30);
+    } else if (newTrackId === 'seoraksan') {
+      if (scene.fog) scene.fog.color.setHex(0x222634);
+      scene.background.setHex(0x1d212e);
     } else {
       if (scene.fog) scene.fog.color.setHex(0x181312);
       scene.background.setHex(0x181312);
@@ -2914,9 +2944,99 @@ async function initApp() {
     });
   }
 
-  // Initial UI sync for active track and character
+  // -------------------------------------------------------------------------
+  // RIDE MODE SELECTOR (ANIMAL KART vs MOUNTAIN BIKE)
+  // -------------------------------------------------------------------------
+  const btnHudVehicleChip = document.getElementById('btn-hud-vehicle-chip');
+  const hudVehicleIconEl = document.getElementById('hud-vehicle-icon');
+  const hudVehicleLabelEl = document.getElementById('hud-vehicle-label');
+  const elWelcomeDriverCards = document.getElementById('welcome-driver-cards');
+  const elWelcomeMtbRiderBanner = document.getElementById('welcome-mtb-rider-banner');
+  const elWelcomeDriverLabel = document.getElementById('welcome-driver-label');
+
+  function syncVehicleModeUi() {
+    const isMtb = activeVehicleMode === 'mtb';
+
+    document.querySelectorAll('#welcome-vehicle-cards .vehicle-select-card').forEach((card) => {
+      card.classList.toggle('active', card.dataset.vehicle === activeVehicleMode);
+    });
+
+    if (elWelcomeDriverCards) {
+      elWelcomeDriverCards.classList.toggle('hidden', isMtb);
+    }
+    if (elWelcomeMtbRiderBanner) {
+      elWelcomeMtbRiderBanner.classList.toggle('hidden', !isMtb);
+    }
+    if (elWelcomeDriverLabel) {
+      elWelcomeDriverLabel.innerHTML = isMtb
+        ? 'MTB TRAIL RIDER / 산악자전거 라이더'
+        : 'SELECT DRIVER / 캐릭터 선택 (5종) <kbd class="welcome-inline-kbd">C</kbd>';
+    }
+
+    if (btnHudVehicleChip) {
+      btnHudVehicleChip.classList.toggle('is-mtb', isMtb);
+    }
+    if (hudVehicleIconEl) {
+      hudVehicleIconEl.textContent = isMtb ? '🚵' : '🏎️';
+    }
+    if (hudVehicleLabelEl) {
+      hudVehicleLabelEl.textContent = isMtb ? 'MOUNTAIN BIKE' : 'ANIMAL KART';
+    }
+    if (btnHudPilotChip) {
+      btnHudPilotChip.classList.toggle('hidden', isMtb);
+    }
+
+    if (isCircuitReady && elWelcomeStartText) {
+      elWelcomeStartText.textContent = isMtb ? 'START MTB RIDE' : 'START TIME TRIAL';
+    }
+  }
+
+  function switchVehicleMode(newMode, autoSelectMtbTrack = true) {
+    const validMode = newMode === 'mtb' ? 'mtb' : 'kart';
+    activeVehicleMode = validMode;
+    try {
+      localStorage.setItem('desk_racer_vehicle_mode', validMode);
+    } catch (_e) {}
+
+    if (microKart.setVehicleMode) {
+      microKart.setVehicleMode(validMode);
+    }
+    if (ghostKart.setVehicleMode) {
+      ghostKart.setVehicleMode(validMode);
+    }
+    if (driftParticles.setVehicleMode) {
+      driftParticles.setVehicleMode(validMode);
+    }
+
+    if (validMode === 'mtb' && autoSelectMtbTrack && activeTrackId !== 'seoraksan') {
+      switchTrack('seoraksan');
+    }
+
+    syncVehicleModeUi();
+  }
+
+  document.querySelectorAll('#welcome-vehicle-cards .vehicle-select-card').forEach((card) => {
+    card.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const vMode = card.dataset.vehicle;
+      if (vMode) {
+        switchVehicleMode(vMode, true);
+      }
+    });
+  });
+
+  if (btnHudVehicleChip) {
+    btnHudVehicleChip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      switchVehicleMode(activeVehicleMode === 'mtb' ? 'kart' : 'mtb', true);
+      btnHudVehicleChip.blur();
+    });
+  }
+
+  // Initial UI sync for active track, character, and ride mode
   updateTrackUiElements(getTrackDefinition(activeTrackId), ghostSystem.getBestLapTime());
   updateCharacterUiElements(getCharacterDefinition(activeCharacterId));
+  syncVehicleModeUi();
 
   if (btnFinishRaceAgain) {
     btnFinishRaceAgain.addEventListener('click', (e) => {
@@ -2975,6 +3095,8 @@ async function initApp() {
       } else {
         openCharacterModal();
       }
+    } else if (e.code === 'KeyV') {
+      switchVehicleMode(activeVehicleMode === 'mtb' ? 'kart' : 'mtb', true);
     } else if (e.code === 'Escape') {
       if (elTrackDialogOverlay && !elTrackDialogOverlay.classList.contains('hidden')) {
         closeTrackModal();
@@ -3316,6 +3438,9 @@ async function initApp() {
     }
     if (coaster?.trackGroup?.userData?.taeanScenery?.userData?.update) {
       coaster.trackGroup.userData.taeanScenery.userData.update(elapsedTime, dt);
+    }
+    if (coaster?.trackGroup?.userData?.seoraksanScenery?.userData?.update) {
+      coaster.trackGroup.userData.seoraksanScenery.userData.update(elapsedTime, dt);
     }
 
     // 4. Update Camera (Chase / Visor POV / Diorama / Helicopter / Inspector / Course Pan / Room Panorama / Gemini 4 Dresser / Keyboard Heli)

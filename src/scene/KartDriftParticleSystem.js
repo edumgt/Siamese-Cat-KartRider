@@ -230,10 +230,16 @@ export function createKartDriftParticleSystem() {
   let currentDriftSpeed = 0.0;
   let isBoundaryContactActive = false;
 
+  let vehicleMode = 'kart';
+  function setVehicleMode(mode) {
+    vehicleMode = mode === 'mtb' ? 'mtb' : 'kart';
+  }
+
   // Reusable math vectors (zero garbage collection in 60fps render loop)
   const _leftTireWorld = new THREE.Vector3();
   const _rightTireWorld = new THREE.Vector3();
   const _centerAxleWorld = new THREE.Vector3();
+  const _mtbRearTireWorld = new THREE.Vector3();
   const _localRailContact = new THREE.Vector3();
   const _worldRailContact = new THREE.Vector3();
   const _backDir = new THREE.Vector3();
@@ -241,10 +247,11 @@ export function createKartDriftParticleSystem() {
   const _upDir = new THREE.Vector3();
   const _spawnPoint = new THREE.Vector3();
 
-  // Local coordinates of Left & Right rear tire contact patches
+  // Local coordinates of Left & Right rear tire contact patches + Single Center MTB Rear Tire
   const LOCAL_REAR_LEFT = new THREE.Vector3(-0.0059, 0.0003, -0.0054);
   const LOCAL_REAR_RIGHT = new THREE.Vector3(0.0059, 0.0003, -0.0054);
   const LOCAL_REAR_CENTER = new THREE.Vector3(0.0, 0.0012, -0.0054);
+  const LOCAL_REAR_MTB_TIRE = new THREE.Vector3(0.0, 0.0003, -0.0060);
 
   /**
    * Spawns a glowing spark particle
@@ -384,9 +391,10 @@ export function createKartDriftParticleSystem() {
     const railSign = Math.sign(latOffset) || 1.0;
 
     // Determine world coordinates of the impacting rail/curb flank
+    const flankOffset = vehicleMode === 'mtb' ? 0.0042 : 0.0068;
     if (kartRoot) {
       kartRoot.updateMatrixWorld(true);
-      _localRailContact.set(railSign * 0.0068, 0.0022, -0.001);
+      _localRailContact.set(railSign * flankOffset, 0.0022, -0.001);
       _worldRailContact.copy(_localRailContact).applyMatrix4(kartRoot.matrixWorld);
     } else if (state.position && state.right) {
       _worldRailContact
@@ -460,10 +468,11 @@ export function createKartDriftParticleSystem() {
     // Ensure kart world matrix is fresh
     kartRoot.updateMatrixWorld(true);
 
-    // Calculate exact world positions of Left & Right rear tire contact patches
+    // Calculate exact world positions of Left & Right rear tire contact patches (or single center MTB tire)
     _leftTireWorld.copy(LOCAL_REAR_LEFT).applyMatrix4(kartRoot.matrixWorld);
     _rightTireWorld.copy(LOCAL_REAR_RIGHT).applyMatrix4(kartRoot.matrixWorld);
     _centerAxleWorld.copy(LOCAL_REAR_CENTER).applyMatrix4(kartRoot.matrixWorld);
+    _mtbRearTireWorld.copy(LOCAL_REAR_MTB_TIRE).applyMatrix4(kartRoot.matrixWorld);
 
     // Calculate kart directional vectors
     if (state.tangent && state.right && state.normal) {
@@ -499,11 +508,12 @@ export function createKartDriftParticleSystem() {
 
       const driftIntensity = 0.5 + 0.7 * highSpeedRatio;
 
+      const isMtb = vehicleMode === 'mtb';
       for (let s = 0; s < sparkCountThisFrame; s++) {
-        // Distribute across both rear wheels with more on outside loaded tire
+        // Distribute across both rear wheels for Kart, or emit from single rear knobby tire for MTB
         const useLeftWheel = isTurningRight ? (Math.random() < 0.65) : (Math.random() < 0.35);
-        const origin = useLeftWheel ? _leftTireWorld : _rightTireWorld;
-        const latSign = useLeftWheel ? -1.0 : 1.0;
+        const origin = isMtb ? _mtbRearTireWorld : (useLeftWheel ? _leftTireWorld : _rightTireWorld);
+        const latSign = isMtb ? (Math.random() - 0.5) * 0.6 : (useLeftWheel ? -1.0 : 1.0);
         emitSpark(
           origin,
           _backDir,
@@ -520,8 +530,8 @@ export function createKartDriftParticleSystem() {
       const smokeCountThisFrame = Math.min(5, Math.max(2, Math.floor(absSpeed * 14.0)));
       for (let m = 0; m < smokeCountThisFrame; m++) {
         const useLeftWheel = m % 2 === 0;
-        const origin = useLeftWheel ? _leftTireWorld : _rightTireWorld;
-        const latSign = useLeftWheel ? -1.0 : 1.0;
+        const origin = isMtb ? _mtbRearTireWorld : (useLeftWheel ? _leftTireWorld : _rightTireWorld);
+        const latSign = isMtb ? 0.0 : (useLeftWheel ? -1.0 : 1.0);
         emitSmoke(origin, _backDir, _rightDir, _upDir, latSign * 0.5 + driftLateralSign * 0.5, kScale);
       }
 
@@ -551,7 +561,8 @@ export function createKartDriftParticleSystem() {
       // Position along the side flank contacting the boundary
       // Vary Z slightly along the length of the chassis to simulate multiple scrape points
       const flankZ = (Math.random() - 0.5) * 0.009 - 0.001;
-      _localRailContact.set(railSign * 0.0068, 0.0022, flankZ);
+      const flankOffset = vehicleMode === 'mtb' ? 0.0042 : 0.0068;
+      _localRailContact.set(railSign * flankOffset, 0.0022, flankZ);
       _worldRailContact.copy(_localRailContact).applyMatrix4(kartRoot.matrixWorld);
 
       // Continuous rail grind: 12 - 22 sparks per frame
@@ -676,6 +687,7 @@ export function createKartDriftParticleSystem() {
     update,
     dispose,
     triggerBoundaryImpact,
+    setVehicleMode,
     isDrifting: () => isDriftingActive,
     isHittingBoundary: () => isBoundaryContactActive,
     getDriftSpeed: () => currentDriftSpeed,

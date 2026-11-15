@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { buildCharacterDriver } from './CharacterDriverBuilder.js';
+import { buildMountainBike } from './MountainBikeBuilder.js';
 
 /**
  * Builds the 1:87 HO Micro-Coaster Racing Go-Kart (18mm x 12mm x 8mm)
  * with 4 steerable/spinning wheels, animal driver, steering wheel,
- * twin turbo exhaust flames, headlights, and a 120-particle drift spark emitter.
+ * twin turbo exhaust flames, headlights, and a 120-particle drift spark emitter,
+ * plus swappable Mountain Bike (산악자전거) mode.
  */
 export function buildMicroKart(initialCharacterId = 'siamese') {
   const kartRoot = new THREE.Group();
@@ -14,6 +16,11 @@ export function buildMicroKart(initialCharacterId = 'siamese') {
   const chassisGroup = new THREE.Group();
   chassisGroup.name = 'KartChassisBody';
   kartRoot.add(chassisGroup);
+
+  let vehicleMode = 'kart';
+  const mtbInstance = buildMountainBike({ isGhost: false });
+  mtbInstance.bikeRoot.visible = false;
+  chassisGroup.add(mtbInstance.bikeRoot);
 
   const redFairingMat = new THREE.MeshStandardMaterial({
     color: 0xff2b1e,
@@ -164,6 +171,7 @@ export function buildMicroKart(initialCharacterId = 'siamese') {
   chassisGroup.add(numberPlate);
 
   // Left & Right Side Pods
+  const sidePods = [];
   for (const sx of [-0.0044, 0.0044]) {
     const sidePod = new THREE.Mesh(
       new THREE.BoxGeometry(0.0024, 0.0024, 0.0076),
@@ -172,6 +180,7 @@ export function buildMicroKart(initialCharacterId = 'siamese') {
     sidePod.position.set(sx, 0.0024, -0.0004);
     sidePod.castShadow = false;
     chassisGroup.add(sidePod);
+    sidePods.push(sidePod);
   }
 
   // Rear Engine Block (right-rear kart motor + cooling fins) & Rear Wing
@@ -329,6 +338,7 @@ export function buildMicroKart(initialCharacterId = 'siamese') {
   const sharedJetGeos = buildExhaustJetGeometry();
 
   const flameCones = [];
+  const exhaustPipes = [];
   for (let i = 0; i < 2; i++) {
     const ex = i === 0 ? -0.00108 : 0.00108;
     const pipe = new THREE.Mesh(
@@ -338,6 +348,7 @@ export function buildMicroKart(initialCharacterId = 'siamese') {
     pipe.rotation.x = Math.PI / 2 + 0.12;
     pipe.position.set(ex, 0.00215, -0.0076);
     chassisGroup.add(pipe);
+    exhaustPipes.push(pipe);
 
     const plumeGroup = new THREE.Group();
     // Anchor right inside the hollow grey/aluminium muffler bore exit and angle
@@ -441,8 +452,8 @@ export function buildMicroKart(initialCharacterId = 'siamese') {
       chassisGroup.remove(currentDriver.root);
     }
     currentDriver = buildCharacterDriver(charId);
-    if (cockpitRoadOnly && currentDriver.root) {
-      currentDriver.root.visible = false;
+    if (currentDriver.root) {
+      currentDriver.root.visible = !cockpitRoadOnly && vehicleMode === 'kart';
     }
     chassisGroup.add(currentDriver.root);
     return currentDriver;
@@ -667,19 +678,25 @@ export function buildMicroKart(initialCharacterId = 'siamese') {
    * Spins all 4 wheels proportional to forward velocity (`speed` in m/s)
    * and steers front wheel pivots to `steerAngle` (`+0.45` for Left `A`, `-0.45` for Right `D`).
    */
-  function updateWheels(dt, speed, steerAngle = 0.0) {
+  function updateWheels(dt, speed, steerAngle = 0.0, state = null) {
     const now = performance.now();
     if (Math.abs(now - lastWheelUpdateTime) < 1e-4) {
       return;
     }
     lastWheelUpdateTime = now;
 
+    const targetSteerRad = THREE.MathUtils.clamp(steerAngle, -0.52, 0.52);
+
+    if (vehicleMode === 'mtb') {
+      mtbInstance.update(dt, speed, targetSteerRad, state, now * 0.001);
+      return;
+    }
+
     const wheelSpinDelta = (speed / 0.002) * dt;
     for (const w of wheelMeshes) {
       w.rotation.x += wheelSpinDelta;
     }
 
-    const targetSteerRad = THREE.MathUtils.clamp(steerAngle, -0.52, 0.52);
     for (const p of frontPivots) {
       p.rotation.y = THREE.MathUtils.lerp(p.rotation.y, targetSteerRad, Math.min(1, dt * 16));
     }
@@ -699,27 +716,30 @@ export function buildMicroKart(initialCharacterId = 'siamese') {
         ? state.steerAngle - (state.driftAngle || 0.0) * 0.35
         : -(state.steerInput || 0.0) * 0.45 - (state.driftAngle || 0.0) * 0.35;
 
-    updateWheels(dt, state.speed, steerAngle);
+    updateWheels(dt, state.speed, steerAngle, state);
 
-    // 3. Apply drift slip-angle yaw + suspension roll/hop to chassisGroup
+    const isMtb = vehicleMode === 'mtb';
+
+    // 3. Apply drift slip-angle yaw + suspension roll/hop (or inward bicycle lean for MTB)
     chassisGroup.rotation.y = THREE.MathUtils.lerp(
       chassisGroup.rotation.y,
-      state.driftAngle || 0.0,
+      isMtb ? (state.driftAngle || 0.0) * 0.45 : (state.driftAngle || 0.0),
       Math.min(1, dt * 14)
     );
+    const targetRollZ = isMtb
+      ? -(state.steerInput || 0.0) * 0.24
+      : (state.steerInput || 0.0) * 0.09;
     chassisGroup.rotation.z = THREE.MathUtils.lerp(
       chassisGroup.rotation.z,
-      (state.steerInput || 0.0) * 0.09,
+      targetRollZ,
       Math.min(1, dt * 12)
     );
     const idleBob =
-      Math.abs(state.speed) > 0.005 ? Math.sin(performance.now() * 0.06) * 0.00018 : 0.0;
+      Math.abs(state.speed) > 0.005 ? Math.sin(performance.now() * 0.06) * (isMtb ? 0.00010 : 0.00018) : 0.0;
     chassisGroup.position.y = (state.hopHeight || 0.0) + idleBob;
 
-    // 4. Volumetric Mach-Diamond Exhaust Flames: active during turbo boost with
-    // independent left/right combustion crackle and high-frequency afterburner
-    // pulsing
-    const isBoosting = state.boostActive > 0;
+    // 4. Volumetric Mach-Diamond Exhaust Flames (Kart mode only)
+    const isBoosting = !isMtb && state.boostActive > 0;
     const tSec = performance.now() * 0.001;
 
     for (const pGroup of flameCones) {
@@ -739,21 +759,21 @@ export function buildMicroKart(initialCharacterId = 'siamese') {
       }
     }
 
-    // 5. Emit & step realistic glowing fire sparks (scaled to 1:150 N-scale rear wheels!)
+    // 5. Emit & step realistic glowing fire sparks (Kart mode only)
     const kScale = kartRoot.scale.x || 0.58;
     sparkMat.uniforms.uSparkScale.value = kScale;
 
     const isEmitting =
+      !isMtb &&
       (state.isDrifting || isBoosting || state.curbRumble > 0.2 || Math.abs(state.steerInput || 0) > 0.32) &&
       Math.abs(state.speed) > 0.03;
     const emitCount = isEmitting ? 6 : 0;
 
-    // Flicker warm orange firelight onto the roadbed/desk when sparks are flying,
-    // scaled by the Settings "Fire Downcast Light" slider (fireLightMultiplier, default 0.12x)
+    // Flicker warm orange firelight onto the roadbed/desk when sparks are flying
     if (fireLightPreviewTimer > 0) {
       fireLightPreviewTimer = Math.max(0.0, fireLightPreviewTimer - dt);
     }
-    const showFireLight = isEmitting || fireLightPreviewTimer > 0;
+    const showFireLight = !isMtb && (isEmitting || fireLightPreviewTimer > 0);
     const baseFireIntensity = 0.35 + Math.random() * 0.20;
     sparkFireLight.intensity = showFireLight
       ? baseFireIntensity * fireLightMultiplier
@@ -828,8 +848,10 @@ export function buildMicroKart(initialCharacterId = 'siamese') {
     floorPan,
     noseCone,
     numberPlate,
+    ...sidePods,
     engineBlock,
     rearWing,
+    ...exhaustPipes,
     seat,
     steeringWheel,
     ...frontPivots,
@@ -840,22 +862,41 @@ export function buildMicroKart(initialCharacterId = 'siamese') {
   let attachedGlbScene = null;
   let cockpitRoadOnly = false;
 
-  function setCockpitRoadOnly(isRoadOnly) {
-    cockpitRoadOnly = Boolean(isRoadOnly);
-    kartShadowQuad.visible = !cockpitRoadOnly;
+  function syncVehicleVisibility() {
+    const showKart = !cockpitRoadOnly && vehicleMode === 'kart';
+    const showMtb = !cockpitRoadOnly && vehicleMode === 'mtb';
+
+    kartShadowQuad.visible = showKart;
     if (currentDriver && currentDriver.root) {
-      currentDriver.root.visible = !cockpitRoadOnly;
+      currentDriver.root.visible = showKart;
     }
     if (attachedGlbScene) {
-      attachedGlbScene.visible = !cockpitRoadOnly;
+      attachedGlbScene.visible = showKart;
+      for (const part of proceduralParts) {
+        if (part) part.visible = false;
+      }
     } else {
       for (const part of proceduralParts) {
-        if (part) part.visible = !cockpitRoadOnly;
+        if (part) part.visible = showKart;
       }
     }
     for (const plane of tailLightGlowPlanes) {
-      if (plane) plane.visible = !cockpitRoadOnly;
+      if (plane) plane.visible = showKart;
     }
+    for (const cone of flameCones) {
+      if (cone && !showKart) cone.visible = false;
+    }
+    mtbInstance.setCockpitRoadOnly(cockpitRoadOnly || !showMtb);
+  }
+
+  function setVehicleMode(mode) {
+    vehicleMode = mode === 'mtb' ? 'mtb' : 'kart';
+    syncVehicleVisibility();
+  }
+
+  function setCockpitRoadOnly(isRoadOnly) {
+    cockpitRoadOnly = Boolean(isRoadOnly);
+    syncVehicleVisibility();
   }
 
   function attachGlbKart(glbScene) {
@@ -863,29 +904,39 @@ export function buildMicroKart(initialCharacterId = 'siamese') {
     // Ensure zero extra rotation on glbScene so +Z nose (Z_three = +0.0090) faces straight down +tangent
     glbScene.position.set(0, 0, 0);
     glbScene.rotation.set(0, 0, 0);
-    glbScene.visible = !cockpitRoadOnly;
-    kartShadowQuad.visible = !cockpitRoadOnly;
 
-    // Hide procedural body/wheels while keeping headlights, tail-light glow halo planes, and turbo flame cones
+    // Hide procedural body/wheels while keeping headlights, tail-light glow halo planes, turbo flame cones, and MTB bike
     for (const part of proceduralParts) {
       if (part) part.visible = false;
     }
+    const isDescendantOf = (node, root) => {
+      let cur = node;
+      while (cur) {
+        if (cur === root) return true;
+        cur = cur.parent;
+      }
+      return false;
+    };
     chassisGroup.traverse((c) => {
       if (
         c.isMesh &&
         !flameCones.includes(c) &&
         !flameCones.includes(c.parent) &&
-        !tailLightGlowPlanes.includes(c)
+        !tailLightGlowPlanes.includes(c) &&
+        !isDescendantOf(c, mtbInstance.bikeRoot) &&
+        !(currentDriver && currentDriver.root && isDescendantOf(c, currentDriver.root))
       ) {
         c.visible = false;
       }
     });
 
-    // Make sure Siamese Cat Driver is fully visible in the cockpit!
-    catDriver.root.visible = !cockpitRoadOnly;
-    catDriver.root.traverse((c) => {
-      if (c.isMesh) c.visible = !cockpitRoadOnly;
-    });
+    // Make sure Driver is visible only when in kart mode & not road-only cockpit
+    if (currentDriver && currentDriver.root) {
+      currentDriver.root.traverse((c) => {
+        if (c.isMesh) c.visible = true;
+      });
+    }
+    syncVehicleVisibility();
 
     function attachKartReadabilityRimShader(mat, cacheKey, minFloorStrength, topFillStrength, rimStrength) {
       mat.customProgramCacheKey = () => cacheKey;
@@ -1072,5 +1123,7 @@ export function buildMicroKart(initialCharacterId = 'siamese') {
     attachGlbKart,
     setDriverCharacter,
     getDriverCharacter: () => currentDriver?.characterId || 'siamese',
+    setVehicleMode,
+    getVehicleMode: () => vehicleMode,
   };
 }

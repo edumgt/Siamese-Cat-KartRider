@@ -53,6 +53,19 @@
           </div>
           <div class="hud-sub-badge-row">
             <button
+              id="btn-hud-vehicle-chip"
+              class="hud-pilot-chip hud-vehicle-chip"
+              type="button"
+              role="button"
+              tabindex="0"
+              aria-label="Switch Ride Mode: Animal Kart / Mountain Bike (V)"
+              title="Switch Ride Mode: 동물 카트 ↔ 산악자전거 (V)"
+            >
+              <span id="hud-vehicle-icon" class="pilot-icon">🏎️</span>
+              <span id="hud-vehicle-label" class="pilot-label">ANIMAL KART</span>
+              <span class="track-badge-key">V</span>
+            </button>
+            <button
               id="btn-hud-pilot-chip"
               class="hud-pilot-chip"
               type="button"
@@ -128,13 +141,52 @@
       <!-- Welcome & Controls Dialog (Shown on Launch & When Clicking "Desk Racer") -->
       <div id="welcome-dialog-overlay" class="welcome-dialog-overlay">
         <div class="welcome-dialog-card" role="dialog" aria-labelledby="welcome-title">
-          <div class="welcome-eyebrow">SIAMESE CAT GRAND PRIX · 3 LAPS</div>
+          <div id="welcome-eyebrow" class="welcome-eyebrow">DESK GRAND PRIX &amp; MOUNTAIN BIKE TRAIL · 3 LAPS</div>
           <h1 id="welcome-title" class="welcome-title">DESK RACER</h1>
+
+          <!-- Ride Mode Selection Block (Animal Kart vs Mountain Bike) -->
+          <div class="welcome-section-group">
+            <div class="welcome-control-label">RIDE MODE / 탑승 선택 <kbd class="welcome-inline-kbd">V</kbd></div>
+            <div class="vehicle-cards-grid" id="welcome-vehicle-cards">
+              <div class="vehicle-select-card active" data-vehicle="kart" role="button" tabindex="0">
+                <div class="vehicle-card-left">
+                  <span class="vehicle-card-icon">🏎️</span>
+                  <div>
+                    <div class="vehicle-card-name">Animal Kart Rider <span class="track-badge-tag tag-gold">KART</span></div>
+                    <div class="vehicle-card-kr">동물 카트라이더 (5종 캐릭터 선택)</div>
+                  </div>
+                </div>
+                <div class="vehicle-card-meta">5 DRIVERS · TURBO</div>
+              </div>
+
+              <div class="vehicle-select-card" data-vehicle="mtb" role="button" tabindex="0">
+                <div class="vehicle-card-left">
+                  <span class="vehicle-card-icon">🚵</span>
+                  <div>
+                    <div class="vehicle-card-name">Mountain Bike <span class="track-badge-tag tag-red">MTB #1</span></div>
+                    <div class="vehicle-card-kr">산악자전거 (설악산 1코스 추천)</div>
+                  </div>
+                </div>
+                <div class="vehicle-card-meta">설악산 MTB · FULL-SUS</div>
+              </div>
+            </div>
+          </div>
 
           <!-- Circuit Selection Block -->
           <div class="welcome-section-group">
             <div class="welcome-control-label">SELECT CIRCUIT / 코스 선택 <kbd class="welcome-inline-kbd">T</kbd></div>
             <div class="track-cards-grid" id="welcome-track-cards">
+              <div class="track-select-card track-select-card-featured" data-track="seoraksan" role="button" tabindex="0">
+                <div class="track-featured-left">
+                  <span class="track-card-icon">🚵</span>
+                  <div>
+                    <div class="track-card-name">Mt. Seoraksan MTB <span class="track-badge-tag tag-red">MTB #1 · 설악산</span></div>
+                    <div class="track-card-kr">설악산 산악자전거 1코스 · 울산바위 · 공룡능선 · 권금성 케이블카 &amp; 비룡폭포</div>
+                  </div>
+                </div>
+                <div class="track-card-stats">3.88m · 15 TURNS · MTB TRAIL #1</div>
+              </div>
+
               <div class="track-select-card active" data-track="taean" role="button" tabindex="0">
                 <div class="track-card-header">
                   <span class="track-card-icon">🏖️</span>
@@ -197,9 +249,9 @@
             </div>
           </div>
 
-          <!-- Driver Selection Block (5 Species) -->
-          <div class="welcome-section-group">
-            <div class="welcome-control-label">SELECT DRIVER / 캐릭터 선택 (5종) <kbd class="welcome-inline-kbd">C</kbd></div>
+          <!-- Driver Selection Block (5 Species for Animal Kart / MTB Rider Summary for MTB) -->
+          <div class="welcome-section-group" id="welcome-driver-section">
+            <div class="welcome-control-label" id="welcome-driver-label">SELECT DRIVER / 캐릭터 선택 (5종) <kbd class="welcome-inline-kbd">C</kbd></div>
             <div class="driver-cards-grid" id="welcome-driver-cards">
               <div class="driver-select-card active" data-character="siamese" role="button" tabindex="0">
                 <div class="driver-card-header">
@@ -249,6 +301,13 @@
                 <div class="driver-card-name">Baby Panda</div>
                 <div class="driver-card-kr">아기 판다</div>
                 <div class="driver-card-tagline">동글동글 대나무 레이서</div>
+              </div>
+            </div>
+            <div id="welcome-mtb-rider-banner" class="welcome-mtb-rider-banner hidden">
+              <span class="mtb-banner-icon">🚵</span>
+              <div class="mtb-banner-text">
+                <div class="mtb-banner-title">SEORAKSAN TRAIL ENDURO CYCLIST · 산악자전거 라이더</div>
+                <div class="mtb-banner-sub">풀서스펜션 29" MTB · 페달링 &amp; 코너 린 인 물리 적용 · 설악산 MTB 1코스 자동 선택</div>
               </div>
             </div>
           </div>

@@ -6,6 +6,32 @@ import * as THREE from 'three';
  */
 export const TRACK_DEFINITIONS = [
   {
+    id: 'seoraksan',
+    name: 'Mt. Seoraksan MTB',
+    nameKr: '설악산 산악자전거 1코스',
+    tagline: 'Ulsanbawi Granite Ridge & Danpung Valley Singletrack',
+    taglineKr: '설악산 울산바위 · 공룡능선 & 비룡폭포 산악자전거 코스',
+    icon: '🚵',
+    vehicleCategory: 'mtb',
+    mtbOrder: 1,
+    difficulty: 'MTB Trail #1',
+    difficultyKr: '산악자전거 1코스',
+    lengthM: 3.88,
+    turns: 15,
+    color: '#ef4444',
+    badgeText: 'MTB #1 · 설악산',
+    description: 'Korea\'s flagship Mt. Seoraksan mountain bike trail climbing past Sinheungsa traditional Korean pavilion, autumn Danpung maple switchbacks, Geumgang red pines, Ulsanbawi 6-spire granite massif with animated cable car, and Biryong Waterfall creek suspension bridge.',
+    descriptionKr: '산악자전거 첫 번째 로드! 한국 설악산의 웅장한 울산바위 기암괴석과 공룡능선, 권금성 빨간 케이블카, 신흥사 전통 기와 누각, 비룡폭포 계곡 출렁다리와 단풍나무 숲길을 질주하는 산악자전거(MTB) 1코스입니다.',
+    sectors: [
+      { id: 1, name: 'Seorak Trailhead & Sinheungsa Gate (설악산 MTB 1코스 출발지)' },
+      { id: 2, name: 'Danpung Maple Switchbacks (설악 단풍나무 업힐 헤어핀)' },
+      { id: 3, name: 'Geumgang Red Pine Climb (금강송 소나무 숲길)' },
+      { id: 4, name: 'Ulsanbawi & Dinosaur Ridge Summit (울산바위 · 공룡능선 정상)' },
+      { id: 5, name: 'Biryong Waterfall Downhill (비룡폭포 계곡 다운힐)' },
+      { id: 6, name: 'Seorak Creek Suspension Bridge Finish (계곡 출렁다리 피니시)' },
+    ],
+  },
+  {
     id: 'taean',
     name: 'Taean West Coast',
     nameKr: '태안 서해 해안도로',
@@ -231,8 +257,8 @@ function buildSplineDataFromControlPoints(def, controlPoints, startFinishIdx = 0
     id: def.id,
     name: def.name,
     is_closed_periodic_loop: true,
-    track_width_m: def.id === 'countryside' ? 0.024 : (def.id === 'hallasan' || def.id === 'taean' ? 0.0235 : 0.022),
-    curb_width_m: def.id === 'countryside' ? 0.0028 : (def.id === 'hallasan' || def.id === 'taean' ? 0.0026 : 0.0025),
+    track_width_m: def.id === 'countryside' ? 0.024 : (def.id === 'hallasan' || def.id === 'taean' || def.id === 'seoraksan' ? 0.0235 : 0.022),
+    curb_width_m: def.id === 'countryside' ? 0.0028 : (def.id === 'hallasan' || def.id === 'taean' || def.id === 'seoraksan' ? 0.0026 : 0.0025),
     rail_height_m: 0.0035,
     total_length_m: Number(totalLength.toFixed(4)),
     scale_equivalent_length_m: Number((totalLength * 87.0).toFixed(1)),
@@ -429,8 +455,45 @@ const TAEAN_CONTROL_POINTS = [
 ];
 
 /**
+ * Control points for Mt. Seoraksan MTB #1: Valley trailhead climbing up Ulsanbawi & Dinosaur Ridge to Y=0.095m summit,
+ * then carving thrilling downhill switchbacks past Biryong Waterfall and the suspension bridge
+ * Format: [x, y, z, bank_deg, sector_id]
+ */
+const SEORAKSAN_CONTROL_POINTS = [
+  // Sector 6 -> Sector 1: Trailhead Wooden Arch & Sinheungsa Gate Straight
+  [0.06, 0.018, 0.236, 0.0, 6],
+  [-0.08, 0.018, 0.236, 0.0, 1],
+  [-0.22, 0.022, 0.228, 8.0, 1],
+
+  // Sector 2: Autumn Danpung Maple Switchbacks (Climbing up Western Seorak Ridge)
+  [-0.35, 0.031, 0.195, 14.0, 2],
+  [-0.44, 0.044, 0.125, 16.0, 2],
+  [-0.46, 0.058, 0.035, -12.0, 2],
+
+  // Sector 3: Geumgang Red Pine Climb
+  [-0.42, 0.072, -0.055, 14.0, 3],
+  [-0.33, 0.084, -0.130, 16.0, 3],
+  [-0.20, 0.092, -0.165, -10.0, 3],
+
+  // Sector 4: Ulsanbawi Granite Cliffs & Dinosaur Ridge Summit (9.5cm alpine high ridge)
+  [-0.05, 0.095, -0.172, 12.0, 4],
+  [0.09, 0.088, -0.155, -14.0, 4],
+  [0.23, 0.076, -0.125, 16.0, 4],
+
+  // Sector 5: Biryong Waterfall Downhill Berms
+  [0.35, 0.060, -0.075, 18.0, 5],
+  [0.44, 0.044, 0.005, -16.0, 5],
+  [0.45, 0.032, 0.095, 15.0, 5],
+
+  // Sector 6: Seorak Creek Suspension Bridge Return to Start
+  [0.38, 0.024, 0.172, 10.0, 6],
+  [0.28, 0.019, 0.220, 6.0, 6],
+  [0.18, 0.018, 0.235, 2.0, 6],
+];
+
+/**
  * Returns the splineData object for the requested track ID.
- * @param {string} trackId - 'taean', 'hallasan', 'classic', 'gymkhana', 'infinity', or 'countryside'
+ * @param {string} trackId - 'seoraksan', 'taean', 'hallasan', 'classic', 'gymkhana', 'infinity', or 'countryside'
  * @param {object} defaultClassicSpline - Pre-loaded track_spline.json if available
  */
 export function getTrackSplineData(trackId, defaultClassicSpline = null) {
@@ -450,6 +513,12 @@ export function getTrackSplineData(trackId, defaultClassicSpline = null) {
   }
 
   const def = TRACK_DEFINITIONS.find((t) => t.id === trackId) || TRACK_DEFINITIONS[0];
+
+  if (trackId === 'seoraksan') {
+    const generated = buildSplineDataFromControlPoints(def, SEORAKSAN_CONTROL_POINTS, 0, 1);
+    splineCache.set('seoraksan', generated);
+    return generated;
+  }
 
   if (trackId === 'taean') {
     const generated = buildSplineDataFromControlPoints(def, TAEAN_CONTROL_POINTS, 0, 1);

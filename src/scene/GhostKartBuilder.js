@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { buildCharacterDriver } from './CharacterDriverBuilder.js';
+import { buildMountainBike } from './MountainBikeBuilder.js';
 
 /**
  * Builds the 1:87 Scale Holographic Ghost Car for Time-Trial Lap Replays.
@@ -23,11 +24,20 @@ export function buildGhostKart(initialCharacterId = 'siamese') {
   let currentGhostDriver = buildCharacterDriver(initialCharacterId, { isGhost: true });
   chassisGroup.add(currentGhostDriver.root);
 
+  // Holographic Mountain Bike (산악자전거 Ghost)
+  const ghostMtb = buildMountainBike({ isGhost: true });
+  ghostMtb.bikeRoot.visible = false;
+  chassisGroup.add(ghostMtb.bikeRoot);
+
+  let vehicleMode = 'kart';
+  let glbGhostClone = null;
+
   function setDriverCharacter(charId) {
     if (currentGhostDriver && currentGhostDriver.root) {
       chassisGroup.remove(currentGhostDriver.root);
     }
     currentGhostDriver = buildCharacterDriver(charId, { isGhost: true });
+    currentGhostDriver.root.visible = vehicleMode === 'kart';
     chassisGroup.add(currentGhostDriver.root);
     return currentGhostDriver;
   }
@@ -239,6 +249,10 @@ export function buildGhostKart(initialCharacterId = 'siamese') {
 
   // 4. Update Wheels (Steering & Spin)
   function updateWheels(dt, speed, steerAngle) {
+    if (vehicleMode === 'mtb') {
+      ghostMtb.update(dt, speed, steerAngle, null, performance.now() * 0.001);
+      return;
+    }
     const spinSpeed = (speed / 0.0026) * dt;
     for (const w of wheelMeshes) {
       w.rotation.x += spinSpeed;
@@ -264,6 +278,9 @@ export function buildGhostKart(initialCharacterId = 'siamese') {
     const targetOpacity = currentOpacity * (0.88 + 0.16 * pulse);
     for (const m of ghostMaterials) {
       m.opacity = targetOpacity;
+    }
+    if (ghostMtb) {
+      ghostMtb.setGhostOpacity(targetOpacity);
     }
 
     // Hologram projection disc slow rotation & breathing
@@ -315,9 +332,11 @@ export function buildGhostKart(initialCharacterId = 'siamese') {
     });
 
     // Hide procedural meshes once GLB ghost is ready, keeping driver visible
+    glbGhostClone = clone;
     proceduralGroup.visible = false;
+    clone.visible = vehicleMode === 'kart';
     if (currentGhostDriver && currentGhostDriver.root) {
-      currentGhostDriver.root.visible = true;
+      currentGhostDriver.root.visible = vehicleMode === 'kart';
     }
     chassisGroup.add(clone);
 
@@ -326,6 +345,21 @@ export function buildGhostKart(initialCharacterId = 'siamese') {
     }
     if (glbFrontWheels.length > 0) {
       frontPivots.push(...glbFrontWheels);
+    }
+  }
+
+  function setVehicleMode(mode) {
+    vehicleMode = mode === 'mtb' ? 'mtb' : 'kart';
+    const isMtb = vehicleMode === 'mtb';
+    ghostMtb.bikeRoot.visible = isMtb;
+    if (glbGhostClone) {
+      glbGhostClone.visible = !isMtb;
+      proceduralGroup.visible = false;
+    } else {
+      proceduralGroup.visible = !isMtb;
+    }
+    if (currentGhostDriver && currentGhostDriver.root) {
+      currentGhostDriver.root.visible = !isMtb;
     }
   }
 
@@ -338,6 +372,9 @@ export function buildGhostKart(initialCharacterId = 'siamese') {
     for (const m of ghostMaterials) {
       m.opacity = currentOpacity;
     }
+    if (ghostMtb) {
+      ghostMtb.setGhostOpacity(currentOpacity);
+    }
   }
 
   return {
@@ -349,5 +386,6 @@ export function buildGhostKart(initialCharacterId = 'siamese') {
     setVisible,
     setOpacity,
     setDriverCharacter,
+    setVehicleMode,
   };
 }

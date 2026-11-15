@@ -440,8 +440,30 @@
         </div>
       </div>
 
-      <!-- Center Formula 1 Countdown Number (Triggered by pressing Enter at Start) -->
-      <div id="hud-f1-countdown" class="hud-f1-countdown hidden">5</div>
+      <!-- Live Drift Score & Multiplier HUD (Appears while drifting) -->
+      <div id="hud-drift-score" class="hud-drift-score hidden" data-tier="1" data-status="active" aria-live="polite">
+        <div class="drift-score-top">
+          <span id="hud-drift-tier" class="drift-tier-label">DRIFT</span>
+          <span id="hud-drift-mult" class="drift-mult-value">×1.0</span>
+        </div>
+        <div id="hud-drift-points" class="drift-points-value">+0</div>
+        <div class="drift-chain-track" aria-hidden="true">
+          <div id="hud-drift-bar" class="drift-chain-bar"></div>
+        </div>
+        <div id="hud-drift-meta" class="drift-meta-line">0.0s · TOTAL 0 PTS</div>
+      </div>
+
+      <!-- Center 3-2-1-GO Race Start Countdown Overlay -->
+      <div id="hud-f1-countdown" class="hud-f1-countdown hidden" data-stage="3" aria-live="assertive" aria-atomic="true">
+        <div class="countdown-burst-ring" aria-hidden="true"></div>
+        <div class="countdown-gantry" aria-hidden="true">
+          <span class="countdown-lamp" data-lamp="3"></span>
+          <span class="countdown-lamp" data-lamp="2"></span>
+          <span class="countdown-lamp" data-lamp="1"></span>
+        </div>
+        <div id="hud-countdown-digit" class="countdown-digit">3</div>
+        <div id="hud-countdown-sub" class="countdown-sub">HOLD W FOR LAUNCH BOOST</div>
+      </div>
 
       <div id="hud-finish-overlay" class="welcome-dialog-overlay hud-finish-overlay hidden" role="dialog" aria-labelledby="hud-finish-title">
         <div class="welcome-dialog-card finish-dialog-card">
@@ -458,6 +480,11 @@
             <span class="finish-track-icon" id="finish-driver-icon">🐱</span>
             <span class="finish-track-label">DRIVER:</span>
             <span id="finish-driver-name" class="finish-track-name">Siamese Cat (샴 고양이)</span>
+          </div>
+          <div id="hud-finish-drift-info" class="hud-finish-track-info">
+            <span class="finish-track-icon" aria-hidden="true">🔥</span>
+            <span class="finish-track-label">DRIFT SCORE:</span>
+            <span id="finish-drift-score" class="finish-track-name">0 PTS</span>
           </div>
           <div id="hud-finish-ghost" class="hud-finish-ghost hidden">
             <span class="finish-ghost-tag">GHOST</span>

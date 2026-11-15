@@ -317,6 +317,9 @@ async function initApp() {
   if (driftParticles.setVehicleMode) {
     driftParticles.setVehicleMode(activeVehicleMode);
   }
+  if (driftParticles.setViewportHeight) {
+    driftParticles.setViewportHeight(drawSize.y);
+  }
   scene.add(driftParticles.group);
 
   const ghostSystem = createGhostSystem(ghostKart, splineData.total_length_m || 3.8371, activeTrackId);
@@ -903,6 +906,9 @@ async function initApp() {
       camShakeIntensity = THREE.MathUtils.clamp(severity, 0.35, 1.0);
       if (driftParticles && driftParticles.triggerBoundaryImpact) {
         driftParticles.triggerBoundaryImpact(severity, physics.state, microKart?.kartRoot);
+      }
+      if (typeof onDriftBoundaryHit === 'function') {
+        onDriftBoundaryHit(severity);
       }
     });
   }
@@ -2102,10 +2108,274 @@ async function initApp() {
     document.getElementById('lap-d5'),
   ];
   const elF1Countdown = document.getElementById('hud-f1-countdown');
+  const elCountdownDigit = document.getElementById('hud-countdown-digit');
+  const elCountdownSub = document.getElementById('hud-countdown-sub');
+  const elCountdownLamps = elF1Countdown
+    ? Array.from(elF1Countdown.querySelectorAll('.countdown-lamp'))
+    : [];
   const elFinishOverlay = document.getElementById('hud-finish-overlay');
   const elFinishTime = document.getElementById('hud-finish-time');
   const elFinishSub = document.getElementById('hud-finish-sub');
+  const elFinishDriftScore = document.getElementById('finish-drift-score');
   const elVisorInline = document.getElementById('visor-telem-inline');
+
+  const elDriftScore = document.getElementById('hud-drift-score');
+  const elDriftTier = document.getElementById('hud-drift-tier');
+  const elDriftMult = document.getElementById('hud-drift-mult');
+  const elDriftPoints = document.getElementById('hud-drift-points');
+  const elDriftBar = document.getElementById('hud-drift-bar');
+  const elDriftMeta = document.getElementById('hud-drift-meta');
+
+  // -------------------------------------------------------------------------
+  // DRIFT SCORE & MULTIPLIER SYSTEM (Rewards Long, Continuous Drifts)
+  // -------------------------------------------------------------------------
+  const DRIFT_TIERS = [
+    { tier: 1, minSec: 0.0, mult: 1.0, label: 'DRIFT' },
+    { tier: 2, minSec: 1.0, mult: 1.5, label: 'SUPER DRIFT' },
+    { tier: 3, minSec: 2.2, mult: 2.0, label: 'HYPER DRIFT' },
+    { tier: 4, minSec: 3.8, mult: 3.0, label: 'ULTRA DRIFT' },
+    { tier: 5, minSec: 5.8, mult: 5.0, label: 'LEGENDARY' },
+  ];
+  const DRIFT_GRACE_WINDOW = 0.85;
+  const DRIFT_MIN_BANK_RAW = 25;
+
+  const driftScoreState = {
+    rawPoints: 0.0,
+    driftDuration: 0.0,
+    graceTimer: 0.0,
+    tier: 1,
+    multiplier: 1.0,
+    totalScore: 0,
+    bannerMode: '', // '', 'banked', 'broken'
+    bannerTimer: 0.0,
+    bannerPoints: 0,
+    visible: false,
+    lastStatus: '',
+    lastTier: 0,
+    lastMultStr: '',
+    lastTierStr: '',
+    lastPtsStr: '',
+    lastMetaStr: '',
+    lastBarPct: -1,
+  };
+
+  function getDriftTierInfo(durationSec) {
+    let cur = DRIFT_TIERS[0];
+    let next = DRIFT_TIERS[1] || null;
+    for (let i = 0; i < DRIFT_TIERS.length; i++) {
+      if (durationSec >= DRIFT_TIERS[i].minSec) {
+        cur = DRIFT_TIERS[i];
+        next = DRIFT_TIERS[i + 1] || null;
+      }
+    }
+    return { cur, next };
+  }
+
+  function resetDriftScore(clearTotal = true) {
+    driftScoreState.rawPoints = 0.0;
+    driftScoreState.driftDuration = 0.0;
+    driftScoreState.graceTimer = 0.0;
+    driftScoreState.tier = 1;
+    driftScoreState.multiplier = 1.0;
+    driftScoreState.bannerMode = '';
+    driftScoreState.bannerTimer = 0.0;
+    driftScoreState.bannerPoints = 0;
+    if (clearTotal) {
+      driftScoreState.totalScore = 0;
+    }
+    if (elDriftScore && driftScoreState.visible) {
+      driftScoreState.visible = false;
+      elDriftScore.classList.add('hidden');
+    }
+  }
+
+  function finalizeActiveDriftBank() {
+    if (driftScoreState.rawPoints >= DRIFT_MIN_BANK_RAW) {
+      const gained = Math.round(driftScoreState.rawPoints * driftScoreState.multiplier);
+      driftScoreState.totalScore += gained;
+      driftScoreState.bannerMode = 'banked';
+      driftScoreState.bannerTimer = 1.05;
+      driftScoreState.bannerPoints = gained;
+    } else {
+      driftScoreState.bannerMode = '';
+      driftScoreState.bannerTimer = 0.0;
+    }
+    driftScoreState.rawPoints = 0.0;
+    driftScoreState.driftDuration = 0.0;
+    driftScoreState.graceTimer = 0.0;
+    driftScoreState.tier = 1;
+    driftScoreState.multiplier = 1.0;
+  }
+
+  function onDriftBoundaryHit(severity = 0.7) {
+    if (ghostSystem.isReplayActive()) return;
+    if (physics.state.autopilot || physics.state.countdownLocked) return;
+    if (severity >= 0.48 && driftScoreState.rawPoints >= 40) {
+      driftScoreState.bannerPoints = Math.round(
+        driftScoreState.rawPoints * driftScoreState.multiplier
+      );
+      driftScoreState.rawPoints = 0.0;
+      driftScoreState.driftDuration = 0.0;
+      driftScoreState.graceTimer = 0.0;
+      driftScoreState.tier = 1;
+      driftScoreState.multiplier = 1.0;
+      driftScoreState.bannerMode = 'broken';
+      driftScoreState.bannerTimer = 0.90;
+    }
+  }
+
+  function stepDriftScore(dt, st) {
+    if (!elDriftScore) return;
+
+    const isRacingHud =
+      (activeCameraMode === 1 || activeCameraMode === 2) &&
+      !ghostSystem.isReplayActive() &&
+      !(st.autopilot && !st.victoryCruise) &&
+      !st.countdownLocked &&
+      !finishOverlayShown &&
+      (!elWelcomeOverlay || elWelcomeOverlay.classList.contains('hidden'));
+
+    if (!isRacingHud || st.raceFinished) {
+      if (driftScoreState.visible) {
+        driftScoreState.visible = false;
+        elDriftScore.classList.add('hidden');
+      }
+      return;
+    }
+
+    const absSpeed = Math.abs(st.speed || 0.0);
+    const isActivelyDrifting = Boolean(st.isDrifting && absSpeed > 0.032);
+
+    if (isActivelyDrifting) {
+      driftScoreState.bannerMode = '';
+      driftScoreState.bannerTimer = 0.0;
+      driftScoreState.graceTimer = DRIFT_GRACE_WINDOW;
+      driftScoreState.driftDuration += dt;
+
+      const { cur } = getDriftTierInfo(driftScoreState.driftDuration);
+      if (cur.tier > driftScoreState.tier && driftScoreState.rawPoints >= 15) {
+        elDriftScore.classList.remove('tier-pop');
+        void elDriftScore.offsetWidth;
+        elDriftScore.classList.add('tier-pop');
+      }
+      driftScoreState.tier = cur.tier;
+      driftScoreState.multiplier = cur.mult;
+
+      const speedFactor = THREE.MathUtils.clamp(absSpeed / 0.14, 0.45, 1.85);
+      const steerFactor = THREE.MathUtils.clamp(
+        Math.max(Math.abs(st.steerInput || 0.0), Math.abs(st.steerAngle || 0.0) / 0.45),
+        0.35,
+        1.15
+      );
+      const boostFactor = st.boostActive > 0 ? 1.25 : 1.0;
+      driftScoreState.rawPoints += 165.0 * speedFactor * steerFactor * boostFactor * dt;
+    } else if (driftScoreState.rawPoints > 0.0) {
+      driftScoreState.graceTimer -= dt;
+      if (driftScoreState.graceTimer <= 0.0) {
+        finalizeActiveDriftBank();
+      }
+    } else if (driftScoreState.bannerTimer > 0.0) {
+      driftScoreState.bannerTimer -= dt;
+      if (driftScoreState.bannerTimer <= 0.0) {
+        driftScoreState.bannerMode = '';
+        driftScoreState.bannerTimer = 0.0;
+      }
+    }
+
+    // Decide visibility & render payload
+    const hasActiveCombo = driftScoreState.rawPoints >= 8;
+    const hasBanner = Boolean(driftScoreState.bannerMode && driftScoreState.bannerTimer > 0.0);
+
+    if (!hasActiveCombo && !hasBanner) {
+      if (driftScoreState.visible) {
+        driftScoreState.visible = false;
+        elDriftScore.classList.add('hidden');
+      }
+      return;
+    }
+
+    if (!driftScoreState.visible) {
+      driftScoreState.visible = true;
+      elDriftScore.classList.remove('hidden');
+    }
+
+    let statusAttr = 'active';
+    let tierNum = driftScoreState.tier;
+    let tierLabel = '';
+    let multStr = '';
+    let ptsStr = '';
+    let metaStr = '';
+    let barPct = 0;
+
+    if (hasBanner) {
+      statusAttr = driftScoreState.bannerMode;
+      tierNum = driftScoreState.bannerMode === 'banked' ? driftScoreState.tier : 1;
+      if (driftScoreState.bannerMode === 'banked') {
+        tierLabel = 'DRIFT BANKED';
+        multStr = 'SAVED';
+        ptsStr = `+${driftScoreState.bannerPoints.toLocaleString()}`;
+        metaStr = `TOTAL ${driftScoreState.totalScore.toLocaleString()} PTS`;
+        barPct = 100;
+      } else {
+        tierLabel = 'DRIFT BROKEN';
+        multStr = 'WALL HIT';
+        ptsStr = '0';
+        metaStr = `TOTAL ${driftScoreState.totalScore.toLocaleString()} PTS`;
+        barPct = 0;
+      }
+    } else {
+      statusAttr = isActivelyDrifting ? 'active' : 'grace';
+      const { cur, next } = getDriftTierInfo(driftScoreState.driftDuration);
+      tierNum = cur.tier;
+      tierLabel = isActivelyDrifting ? cur.label : `${cur.label} · LINK`;
+      multStr = `×${cur.mult.toFixed(1)}`;
+      const liveComboPts = Math.round(driftScoreState.rawPoints * cur.mult);
+      ptsStr = `+${liveComboPts.toLocaleString()}`;
+      metaStr = `${driftScoreState.driftDuration.toFixed(1)}s · TOTAL ${driftScoreState.totalScore.toLocaleString()} PTS`;
+
+      if (!isActivelyDrifting) {
+        barPct = Math.round(
+          THREE.MathUtils.clamp(driftScoreState.graceTimer / DRIFT_GRACE_WINDOW, 0, 1) * 100
+        );
+      } else if (next) {
+        const span = Math.max(0.1, next.minSec - cur.minSec);
+        barPct = Math.round(
+          THREE.MathUtils.clamp((driftScoreState.driftDuration - cur.minSec) / span, 0, 1) * 100
+        );
+      } else {
+        barPct = 100;
+      }
+    }
+
+    if (statusAttr !== driftScoreState.lastStatus) {
+      driftScoreState.lastStatus = statusAttr;
+      elDriftScore.dataset.status = statusAttr;
+    }
+    if (tierNum !== driftScoreState.lastTier) {
+      driftScoreState.lastTier = tierNum;
+      elDriftScore.dataset.tier = String(tierNum);
+    }
+    if (tierLabel !== driftScoreState.lastTierStr && elDriftTier) {
+      driftScoreState.lastTierStr = tierLabel;
+      elDriftTier.textContent = tierLabel;
+    }
+    if (multStr !== driftScoreState.lastMultStr && elDriftMult) {
+      driftScoreState.lastMultStr = multStr;
+      elDriftMult.textContent = multStr;
+    }
+    if (ptsStr !== driftScoreState.lastPtsStr && elDriftPoints) {
+      driftScoreState.lastPtsStr = ptsStr;
+      elDriftPoints.textContent = ptsStr;
+    }
+    if (metaStr !== driftScoreState.lastMetaStr && elDriftMeta) {
+      driftScoreState.lastMetaStr = metaStr;
+      elDriftMeta.textContent = metaStr;
+    }
+    if (barPct !== driftScoreState.lastBarPct && elDriftBar) {
+      driftScoreState.lastBarPct = barPct;
+      elDriftBar.style.width = `${barPct}%`;
+    }
+  }
 
   function formatLapTimerMMSSCC(seconds) {
     const totalCentis = Math.max(0, Math.floor((seconds || 0) * 100));
@@ -2200,6 +2470,12 @@ async function initApp() {
     if (typeof syncReplayAvailabilityButtons === 'function') {
       syncReplayAvailabilityButtons();
     }
+    if (driftScoreState.rawPoints >= DRIFT_MIN_BANK_RAW) {
+      finalizeActiveDriftBank();
+    }
+    if (elFinishDriftScore) {
+      elFinishDriftScore.textContent = `${driftScoreState.totalScore.toLocaleString()} PTS`;
+    }
     if (elFinishOverlay) {
       elFinishOverlay.classList.remove('hidden');
     }
@@ -2254,24 +2530,66 @@ async function initApp() {
     }
   });
 
-  // Formula 1 5-Light Start Sequence State (Triggered by pressing Enter)
+  // 3-2-1-GO Visual Race Start Sequence (Synchronized with 3D Gantry Lights, Audio, & Lap Timer)
   const f1CountdownState = {
     active: false,
     elapsed: 0.0,
-    stepDuration: 0.85, // 0.85s per light (5 lights right-to-left = 4.25s total before Lights Out!)
+    stepDuration: 0.85, // 0.85s per beat: 3 -> 2 -> 1 (2.55s) before GO! & lap timer start
     lastStepIndex: -1,
+    goBannerTimer: 0.0,
   };
+
+  function renderCountdownVisualStage(stage) {
+    if (!elF1Countdown) return;
+    const stageStr = String(stage);
+    elF1Countdown.dataset.stage = stageStr;
+
+    if (elCountdownDigit) {
+      elCountdownDigit.textContent = stageStr === 'go' ? 'GO!' : stageStr;
+    }
+    if (elCountdownSub) {
+      if (stageStr === '3') {
+        elCountdownSub.textContent = 'HOLD W FOR LAUNCH BOOST';
+      } else if (stageStr === '2') {
+        elCountdownSub.textContent = 'ENGINES READY · SET YOUR LINE';
+      } else if (stageStr === '1') {
+        elCountdownSub.textContent = 'GET READY TO LAUNCH';
+      } else {
+        elCountdownSub.textContent = 'LIGHTS OUT · TIMING STARTED';
+      }
+    }
+
+    for (let i = 0; i < elCountdownLamps.length; i++) {
+      const lamp = elCountdownLamps[i];
+      lamp.classList.remove('lit-red', 'lit-amber', 'lit-gold', 'lit-green');
+      if (stageStr === '3' && i === 0) {
+        lamp.classList.add('lit-red');
+      } else if (stageStr === '2' && i <= 1) {
+        lamp.classList.add('lit-amber');
+      } else if (stageStr === '1') {
+        lamp.classList.add('lit-gold');
+      } else if (stageStr === 'go') {
+        lamp.classList.add('lit-green');
+      }
+    }
+
+    elF1Countdown.classList.remove('hidden', 'is-animating');
+    void elF1Countdown.offsetWidth;
+    elF1Countdown.classList.add('is-animating');
+  }
 
   function cancelF1StartCountdown() {
     f1CountdownState.active = false;
     f1CountdownState.elapsed = 0.0;
     f1CountdownState.lastStepIndex = -1;
+    f1CountdownState.goBannerTimer = 0.0;
     physics.state.countdownLocked = false;
     if (coaster.setF1StartLights) {
       coaster.setF1StartLights(0);
     }
     if (elF1Countdown) {
       elF1Countdown.classList.add('hidden');
+      elF1Countdown.classList.remove('is-animating');
     }
   }
 
@@ -2284,59 +2602,68 @@ async function initApp() {
     physics.resetToStart();
     physics.state.countdownLocked = true;
     physics.state.raceClockActive = false;
+    if (driftParticles && driftParticles.reset) {
+      driftParticles.reset();
+    }
+    resetDriftScore(true);
 
     f1CountdownState.active = true;
     f1CountdownState.elapsed = 0.0;
     f1CountdownState.lastStepIndex = 1;
+    f1CountdownState.goBannerTimer = 0.0;
 
     if (coaster.setF1StartLights) {
-      coaster.setF1StartLights(1); // Rightmost light (#1) turns RED immediately
+      coaster.setF1StartLights(2); // Rightmost gantry pods light up on "3"
     }
     if (audioSynth.playF1CountdownBeep) {
       audioSynth.playF1CountdownBeep(false);
     }
-    if (elF1Countdown) {
-      elF1Countdown.textContent = '5';
-      elF1Countdown.classList.remove('hidden');
-    }
+    renderCountdownVisualStage('3');
   }
 
   function stepF1StartCountdown(dt) {
-    if (!f1CountdownState.active) return;
+    if (!f1CountdownState.active) {
+      if (f1CountdownState.goBannerTimer > 0.0) {
+        f1CountdownState.goBannerTimer = Math.max(0.0, f1CountdownState.goBannerTimer - dt);
+        if (f1CountdownState.goBannerTimer <= 0.0 && elF1Countdown) {
+          elF1Countdown.classList.add('hidden');
+          elF1Countdown.classList.remove('is-animating');
+        }
+      }
+      return;
+    }
+
     f1CountdownState.elapsed += dt;
     const stepIdx = Math.floor(f1CountdownState.elapsed / f1CountdownState.stepDuration) + 1;
 
-    if (stepIdx <= 5) {
+    if (stepIdx <= 3) {
       if (stepIdx !== f1CountdownState.lastStepIndex) {
         f1CountdownState.lastStepIndex = stepIdx;
         if (coaster.setF1StartLights) {
-          coaster.setF1StartLights(stepIdx); // Lights 1..stepIdx from right to left turn RED
+          const gantryCount = stepIdx === 1 ? 2 : stepIdx === 2 ? 4 : 5;
+          coaster.setF1StartLights(gantryCount);
         }
         if (audioSynth.playF1CountdownBeep) {
-          audioSynth.playF1CountdownBeep(
-              false);  // Same tone for each red lamp (2..5)
+          audioSynth.playF1CountdownBeep(false);
         }
-        if (elF1Countdown) {
-          elF1Countdown.textContent = String(6 - stepIdx); // 5, 4, 3, 2, 1
-          elF1Countdown.classList.remove('hidden');
-        }
+        renderCountdownVisualStage(String(4 - stepIdx)); // 3, 2, 1
       }
     } else {
-      // All 5 lights have turned red from right to left -> LIGHTS OUT AND AWAY WE GO!
+      // 3-2-1 Complete -> LIGHTS OUT & GO! Lap timer starts immediately!
       f1CountdownState.active = false;
       f1CountdownState.lastStepIndex = -1;
+      f1CountdownState.goBannerTimer = 0.65;
+
       if (coaster.setF1StartLights) {
-        coaster.setF1StartLights(0); // All 5 lights turn OFF simultaneously
+        coaster.setF1StartLights(0);
       }
       if (audioSynth.playF1CountdownBeep) {
-        audioSynth.playF1CountdownBeep(
-            true);  // High beep once all lights are off!
+        audioSynth.playF1CountdownBeep(true);
       }
-      if (elF1Countdown) {
-        elF1Countdown.classList.add('hidden');
-      }
+      renderCountdownVisualStage('go');
+
       physics.state.countdownLocked = false;
-      physics.state.raceClockActive = true; // Lap timer immediately starts ticking!
+      physics.state.raceClockActive = true; // Lap timer begins ticking!
       if (physics.notifyLightsOut) {
         physics.notifyLightsOut();
       }
@@ -2794,6 +3121,10 @@ async function initApp() {
     if (ghostSystem.isReplayActive()) {
       exitGhostReplay();
     }
+    if (driftParticles && driftParticles.reset) {
+      driftParticles.reset();
+    }
+    resetDriftScore(true);
 
     // Switch Ghost Car system to track-specific recording and ghost model
     const trackBestLap = ghostSystem.setTrack(newTrackId, newSplineData.total_length_m);
@@ -3212,6 +3543,7 @@ async function initApp() {
     if (driftParticles && driftParticles.reset) {
       driftParticles.reset();
     }
+    resetDriftScore(false);
     refreshReplayTrailGeometry();
     syncReplayDockUI();
     return true;
@@ -3448,8 +3780,8 @@ async function initApp() {
         hideWelcomeDialog();
         hideFinishOverlay();
         hideLapSplit();
-        cancelF1StartCountdown();
         ghostSystem.resetAllRecordings();
+        startF1StartCountdown();
       }
     } else if (e.code === 'KeyP') {
       if (ghostSystem.isReplayActive()) {
@@ -3460,6 +3792,7 @@ async function initApp() {
       hideLapSplit();
       cancelF1StartCountdown();
       ghostSystem.resetAllRecordings();
+      resetDriftScore(true);
     }
   });
 
@@ -3624,7 +3957,7 @@ async function initApp() {
   }
   if (urlParams.has('f1step')) {
     const f1Step = parseInt(urlParams.get('f1step'), 10);
-    if (f1Step >= 1 && f1Step <= 5) {
+    if (f1Step >= 1 && f1Step <= 4) {
       startF1StartCountdown();
       f1CountdownState.elapsed = (f1Step - 1) * f1CountdownState.stepDuration;
       f1CountdownState.lastStepIndex = -1;
@@ -3689,6 +4022,9 @@ async function initApp() {
       1.0 / newDrawSize.x,
       1.0 / newDrawSize.y
     );
+    if (driftParticles && driftParticles.setViewportHeight) {
+      driftParticles.setViewportHeight(newDrawSize.y);
+    }
   });
 
   const clock = new THREE.Clock();
@@ -3898,8 +4234,9 @@ async function initApp() {
                          0.0042 * activeDofScale;
     }
 
-    // 5. Update WebAudio Synth & HUD
+    // 5. Update WebAudio Synth, Drift Score Multiplier & HUD
     audioSynth.update(st);
+    stepDriftScore(isScreenshotMode ? 0.0 : dt, st);
     updateHUD(st);
 
     if (isScreenshotMode) {

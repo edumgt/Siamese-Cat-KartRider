@@ -1,130 +1,175 @@
 # Desk Racer
 
-<img width="1501" height="667" alt="image" src="https://github.com/user-attachments/assets/4b71da86-cfc8-4602-a791-ba0edea3542d" />
+[English](README.md) · [한국어](README.ko.md)
 
+A browser time trial rendered with **Three.js** and **WebGL2**. You race a 1:87 Siamese-cat kart, or a mountain bike, on closed spline circuits: a night desk diorama, the Taean west coast, Mt. Seoraksan, and Hallasan. Scenic tracks, vehicles, and most props are procedural JavaScript meshes. Optional GLBs load through a Vite proxy when the CDN is reachable.
 
-A browser time-trial where a seal-point Siamese cat drives a 1:87 HO-scale kart around a miniature coaster built on a night-time desk. Three laps, a ghost of your best lap, and a diorama of real desk objects: a Logitech G915, an LG UltraGear, a boom mic, a key light, and a ginger cat figurine.
+The on-screen title is **Desk Racer**. The package name is `desk-racer`.
 
-The in-game title is **Siamese Cat Grand Prix**. The package name is `desk-racer`.
+## Screens
 
-## Features
+Three frames from the running app (`npm run dev`). The first is the launch overlay on the live WebGL view. The other two are chase cameras during a time trial.
 
-- **3-lap time trial** on a closed coaster, with an F1-style start countdown and a finish screen (total time and best lap).
-- **Siamese cat driver** with seal-point fur, sapphire eyes, racing goggles, a steering-wheel grip, a head that leans into turns, and a swishing tail.
-- **1:87 micro kart** (about 18 × 12 × 8 mm) with steerable wheels, headlights, exhaust, and drift sparks.
-- **Spline-assisted driving** on a banked track. Steer to hold the racing line; miss the apex and the kart slides toward the outside rail. A clean corner exit gives a short boost. Hitting the guardrail pins you.
-- **Ghost car** records your best lap at 30 Hz, replays it as a cyan hologram, and shows a live time delta. The record is stored in `localStorage` (`desk_racer_ghost_v1`). Toggle it with **G**.
-- **Autopilot** follows the racing line, drifts the tight sectors, and boosts on the keyboard straight.
-- **Four cameras:** chase, cockpit, free desk orbit, and a kart-locked drone.
-- **Desk diorama** at real-world millimeter scale, plus a bedroom around the desk. GLB props are preferred; procedural meshes are the fallback.
-- **Night lighting** with a warm desk lamp, cyan keyboard and mouse-pad glow, a blue mic ring, soft shadows, depth-of-field, bloom, and FXAA.
-- **Hybrid audio:** sampled idle, cruise, drift, and curb loops, plus exhaust sputters, crossfaded by engine speed. Mute with **M**.
-- **Touch controls** for phones after the race starts.
+### Launch
 
-## Controls
+Ride, circuit, and driver selection sit on top of the scene that is already rendering behind the dialog.
 
-| Input | Action |
+![Launch screen: ride, circuit, and driver selection over the live WebGL view](docs/screenshots/01-welcome.png)
+
+### Taean west coast — kart chase
+
+Coastal pines, chevron curbs, and the minimap around a Siamese-cat kart. Camera 1 follows about 15 mm behind the 1:87 body.
+
+![Taean west-coast time trial, chase camera on the Siamese-cat kart](docs/screenshots/02-taean-chase.png)
+
+### Mt. Seoraksan — mountain bike chase
+
+The same chase rig on the Seoraksan MTB circuit. Orange emissive light is the drift / boost glow on the rider.
+
+![Seoraksan mountain-bike time trial, chase camera](docs/screenshots/03-seoraksan-mtb.png)
+
+## 3D JavaScript
+
+The race is one page: `index.html` for the HUD, `src/main.js` for the frame loop. React is a dependency but does not own the scene.
+
+### Scale and the scene graph
+
+World units are meters. The kart mesh is a 1:87 HO body, about 18 × 12 × 8 mm, drawn at scale `0.38`. The chase rig is the low 1:150 camera: about 15.4 mm behind, 7.4 mm up, 41.5° FOV. The perspective near plane is 2 mm so the macro shot does not clip the shell.
+
+`WebGLRenderer` uses ACES Filmic tone mapping and PCF soft shadows. A PMREM `RoomEnvironment` supplies image-based lighting. Scenic circuits add their own sun, sky, and fog on top of that rig.
+
+### Post-processing
+
+`EffectComposer` runs every presented frame:
+
+1. `RenderPass` with a hardware depth texture
+2. A custom bokeh pass (48-tap golden-angle Vogel spiral, `DEPTH_PACKING = 0`, foreground samples rejected)
+3. `UnrealBloomPass` (strength `0.06`, radius `0.22`, threshold `1.15` so only LEDs and embers bloom)
+4. `OutputPass` for tone mapping
+5. FXAA
+
+Default depth-of-field strength is `0.35`. `?dof=0` closes the aperture; the shader still reads depth once. `?screenshot=1` renders two frames, sets `document.body.id = "screenshot-ready"`, and stops `requestAnimationFrame` so a headless capture does not stall on the bokeh readback.
+
+### Splines, meshes, and materials
+
+Each circuit is a closed centripetal `THREE.CatmullRomCurve3`, sampled into 720 frames in `src/scene/TrackRegistry.js`. A quaternion around the tangent banks the road. Those frames extrude the asphalt, chevron curbs, rails, and tunnel segments in `CoasterTrackBuilder.js`.
+
+Scenic dressing is also JavaScript, not a downloaded world mesh:
+
+| Circuit | Builder |
 | --- | --- |
-| **Enter** | Start the time trial, or race again from the finish screen |
-| **W** / **↑** | Accelerate |
-| **S** / **↓** | Brake |
-| **A** / **←** **D** / **→** | Steer |
-| **1** | Chase view |
-| **2** | Cockpit |
-| **3** | Full desk (orbit, pan, zoom) |
-| **4** | Drone / helicopter view |
-| **G** | Toggle ghost car |
-| **M** | Mute / unmute |
-| **P** | Toggle autopilot |
-| **R** | Reset to the start line |
+| Taean west coast | `TaeanCoastSceneryBuilder.js` |
+| Mt. Seoraksan MTB | `SeoraksanMtbSceneryBuilder.js` |
+| Hallasan | `JejuHallasanSceneryBuilder.js` |
+| Night desk, gymkhana, infinity, countryside | `DeskDioramaBuilder.js` plus track-specific props |
 
-Driving with **W / A / S / D** or the arrow keys cancels autopilot. On a phone, use the on-screen steer, accel, and brake buttons.
+`ProceduralTextures.js` paints albedo, roughness, and normal maps on `CanvasTexture` (wood, asphalt, knit, fur, water). `GoldenHourAtmosphere.js` places the sun and fog for the outdoor circuits. Drift sparks and the ghost hologram are their own mesh systems (`KartDriftParticleSystem.js`, `GhostKartBuilder.js`).
 
-Click the **Desk Racer** title to reopen the controls dialog.
+Optional GLBs (`desk_props`, `track_coaster`, `kart_1to87`, `room_environment`) are preferred for the classic desk when `www.gstatic.com` answers. The procedural builders always cover the scene if the proxy fails.
 
-## Getting started
+### Cameras and vehicles
 
-Requires Node.js 18+ (or [Bun](https://bun.sh)) and a WebGL2 browser. A network connection is needed the first time so the dev server can proxy the desk, track, kart, and room GLBs.
+`setCameraMode` in `src/main.js`:
+
+| Key | Mode | What it does |
+| --- | --- | --- |
+| `1` | Chase | Racing HUD. Look-at stays on the body. |
+| `2` | Cockpit | Same HUD, camera inside the shell. |
+| `3` | Desk orbit | `OrbitControls` over the whole diorama. HUD hides. |
+| `4` | Drone | Free follow above the spline. HUD hides. |
+
+Five animal drivers are built in `CharacterDriverBuilder.js`: Siamese Cat, Shiba Inu, Baby Otter, Golden Retriever, and Baby Panda. `V` swaps the kart for the procedural mountain bike in `MountainBikeBuilder.js`. `G` toggles a translucent ghost replay from `GhostSystem.js`.
+
+### Driving model
+
+This is not a free rigid-body car. `KartPhysicsController.js` keeps a Rapier world for the static desk and trimesh contacts, and a kinematic body for the vehicle. Each step projects the rider onto the spline, applies throttle, brake, and steer, then writes the resulting pose back to the Three.js group.
+
+HUD speed is display scale, not raw meters per second:
+
+```text
+km/h = round(|speed| * 102.35 * 3.6)
+```
+
+About `0.204` m/s on the spline reads as `75` km/h. Track and vehicle choices persist in `localStorage` (`desk_racer_active_track`, `desk_racer_vehicle_mode`, `desk_racer_active_character`). If the stored track is missing or `classic`, startup selects Taean.
+
+```mermaid
+flowchart TD
+  A["CatmullRomCurve3, 720 banked frames"] --> B[Road, curb, and rail meshes]
+  A --> C[Spline vehicle step plus Rapier contacts]
+  C --> D[Kart or MTB group]
+  D --> E["Chase, cockpit, orbit, or drone camera"]
+  E --> F["EffectComposer: depth, bokeh, bloom, tone map, FXAA"]
+  F --> G[WebGL2 canvas]
+```
+
+## Play
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Press **Enter** when the circuit is ready.
+Open the printed local URL. `Enter` starts the selected ride. Production build:
 
 ```bash
-npm run build    # production bundle; downloads GLBs into dist/
-npm run preview  # serve the production build on port 3000
-npm run lint     # tsc --noEmit
+npm run build
+npm run preview
 ```
 
-`predev`, `prebuild`, and `prelint` install dependencies automatically if `node_modules/.bin` is missing (`bun install`, then `npm install`).
+`vite.config.ts` proxies `/proxy-glb/*` to the gstatic CDN and fetches those GLBs at build time into `public/assets/models/`. Scenic circuits do not depend on that fetch.
 
-## How it is built
+### Controls
 
-The page is a single WebGL app. `index.html` mounts the canvas and HUD, then loads `src/main.js`. React is a dependency, but the race loop does not go through `src/App.tsx`.
-
-| Piece | Role |
+| Key | Action |
 | --- | --- |
-| `src/main.js` | Scene, renderer, post-processing, asset load, HUD, cameras, game loop |
-| `src/physics/KartPhysicsController.js` | Rapier world (desk, monuments, track trimesh) plus a spline vehicle step |
-| `src/scene/CoasterTrackBuilder.js` | Track mesh, curbs, rails, start lights, checkered gantry |
-| `src/scene/DeskDioramaBuilder.js` | Oak desk and props, with procedural textures |
-| `src/scene/RoomEnvironmentBuilder.js` | Bedroom around the desk |
-| `src/scene/MicroKartBuilder.js` | Player kart and cat driver |
-| `src/scene/GhostKartBuilder.js` | Holographic ghost kart |
-| `src/scene/SiameseCatDriver.js` | Cat mesh, shared by the player and the ghost |
-| `src/scene/GoldenHourAtmosphere.js` | Lights, dust, and night illumination |
-| `src/ghost/GhostSystem.js` | Lap recording, playback, and `localStorage` |
-| `src/audio/WebAudioSynth.js` | Sampled engine, drift, curb, and one-shot sputters |
-| `public/assets/data/track_spline.json` | 720-sample closed loop (6 sectors, ~3.61 m, ~314 m at full scale) |
-| `public/assets/data/desk_manifest.json` | Desk object sizes and positions in meters |
+| `Enter` or `Space` | Start or dismiss the launch screen |
+| `W` `A` `S` `D` or arrows | Throttle, brake, steer |
+| `1`–`4` | Chase, cockpit, desk orbit, drone (`6` also selects drone) |
+| `C` | Next driver |
+| `V` | Kart / mountain bike |
+| `T` | Next circuit |
+| `R` | Reset to the start line |
+| `P` | Autopilot |
+| `G` | Ghost replay |
+| `B` | Replay the last lap |
+| `M` | Mute |
+| `Esc` | Close dialogs, or the settings popover |
 
-Scale is meters in the scene: 1 unit = 1 m. The kart is HO 1:87. The HUD speedometer is scaled so a cruise of about 0.20 m/s reads as 75 km/h.
+### Circuits
 
-### Track sectors
+| Id | Ride |
+| --- | --- |
+| `taean` | West-coast time trial. Default when nothing is stored. |
+| `seoraksan` | Mountain-bike trail. |
+| `hallasan` | Hallasan scenic loop. |
+| `classic` | Night desk coaster. |
+| `gymkhana` | Tight desk layout. |
+| `infinity` | Figure-eight desk layout. |
+| `countryside` | Longer desk layout. |
 
-1. BoYata laptop-stand climb
-2. Ginger-cat 360° banked helix
-3. Blue-mic underpass and boom-arm ridge
-4. Key-light 360° corkscrew
-5. Mouse-mat C-curve
-6. Logitech G915 lattice viaduct (start / finish)
+### Useful query flags
 
-### Models
+`?cam=1` … `?cam=4` picks a camera. `?sector=1` … `?sector=6` starts part-way along the spline. `?sparks=1` enables autopilot, drift, and boost. `?dof=0` disables bokeh. `?screenshot=1` waits for fonts and optional GLBs, renders two frames, and stops the loop.
 
-At dev time, `/assets/models` and `/api/gstatic-models` proxy:
+## Layout
 
-`https://www.gstatic.com/aistudio/starter-apps/desk-racer/models`
-
-Files: `desk_props.glb`, `track_coaster.glb`, `kart_1to87.glb`, `room_environment.glb`.
-
-`vite build` downloads those files into `dist/assets/models` and `dist/api/gstatic-models`. If a GLB is missing, the procedural builders still draw the desk, track, kart, and room.
-
-### Debug query flags
-
-Optional URL parameters used for screenshots and inspection, not normal play:
-
-`?cam=1..9`, `?sector=1..6`, `?s=`, `?speed=`, `?boost=1`, `?finish=1`, `?f1step=1..5`, `?screenshot=1`, `?sparks=1`, `?hidelogo=1`, `?carview=front|rear`.
-
-## Project layout
-
-```
-index.html                 HUD, welcome dialog, canvas mount
-src/main.js                Game entry and render loop
-src/physics/               Rapier + spline kart controller
-src/scene/                 Diorama, track, kart, cat, lighting
-src/ghost/                 Best-lap ghost
-src/audio/                 Web Audio engine
-public/assets/audio/       Idle, cruise, drift, curb, sputter WAVs
-public/assets/data/        Track spline and desk manifest
-vite.config.ts             Dev proxy and build-time GLB fetch
+```text
+index.html                         HUD, launch dialog, help
+src/main.js                        renderer, cameras, composer, frame loop
+src/physics/KartPhysicsController.js   Rapier world and spline vehicle step
+src/scene/TrackRegistry.js         seven closed splines
+src/scene/CoasterTrackBuilder.js   extruded road, curbs, rails
+src/scene/ProceduralTextures.js    canvas PBR maps
+src/scene/*SceneryBuilder.js       Taean, Seoraksan, Hallasan dressing
+src/scene/CharacterDriverBuilder.js    five animal drivers
+src/scene/MountainBikeBuilder.js   procedural MTB
+src/ghost/GhostSystem.js           lap ghost
+public/assets/                   audio, icons, optional GLBs
 ```
 
 ## Stack
 
-- [Vite](https://vitejs.dev/) 6
-- [Three.js](https://threejs.org/) (ACES filmic tone mapping, bokeh, bloom, FXAA)
-- [@dimforge/rapier3d-compat](https://rapier.rs/) for static colliders
-- Web Audio API and sampled stems in `public/assets/audio/`
+- [Three.js](https://threejs.org/) `0.183` — scene graph, splines, post-processing
+- [Rapier](https://rapier.rs/) `0.19` (`@dimforge/rapier3d-compat`) — static contacts
+- [Vite](https://vitejs.dev/) `6` — dev server, GLB proxy, production build
+- Node.js 18+

@@ -15,11 +15,13 @@ const MAX_RUN_FRAMES = 5400; // ~3.6 minutes at 25Hz
 export function createGhostSystem(
   ghostKart,
   initialTrackLength = 3.8371,
-  initialTrackId = 'classic'
+  initialTrackId = 'classic',
+  initialStartFinishArc = 0.0
 ) {
   let isGhostEnabled = true;
   let activeTrackId = initialTrackId;
   let totalTrackLength = initialTrackLength;
+  let startFinishArc = initialStartFinishArc || 0.0;
 
   // 1. Best single-lap ghost (persisted per track, runs live alongside player)
   let bestLapData = null; // { lapTime, date, vehicleMode, characterId, frames }
@@ -110,6 +112,90 @@ export function createGhostSystem(
     );
   }
 
+  function computeLapDistSigned(arcS, tVal, sfArc, totalLen) {
+    const raw = (((arcS - sfArc) % totalLen) + totalLen) % totalLen;
+    if (tVal < 2.2 && raw > totalLen * 0.82) {
+      return raw - totalLen;
+    }
+    return raw;
+  }
+
+  function extractSectorTimesFromFrames(frames, totalLapTime, sfArc, totalLen) {
+    if (!Array.isArray(frames) || frames.length < 6 || !totalLapTime || totalLapTime <= 0.6) {
+      return null;
+    }
+    const cp1Dist = totalLen / 3;
+    const cp2Dist = (totalLen * 2) / 3;
+    let tCp1 = null;
+    let tCp2 = null;
+    let prevDist = computeLapDistSigned(frames[0].d || 0, frames[0].t || 0, sfArc, totalLen);
+    let prevT = frames[0].t || 0;
+
+    for (let i = 1; i < frames.length; i++) {
+      const f = frames[i];
+      const currDist = computeLapDistSigned(f.d || 0, f.t || 0, sfArc, totalLen);
+      const currT = f.t || 0;
+
+      if (tCp1 === null && prevDist < cp1Dist && currDist >= cp1Dist && currDist < totalLen * 0.72) {
+        const span = Math.max(1e-6, currDist - prevDist);
+        const frac = THREE.MathUtils.clamp((cp1Dist - prevDist) / span, 0, 1);
+        tCp1 = prevT + frac * (currT - prevT);
+      }
+      if (
+        tCp1 !== null &&
+        tCp2 === null &&
+        prevDist < cp2Dist &&
+        currDist >= cp2Dist &&
+        currDist < totalLen * 0.98
+      ) {
+        const span = Math.max(1e-6, currDist - prevDist);
+        const frac = THREE.MathUtils.clamp((cp2Dist - prevDist) / span, 0, 1);
+        tCp2 = prevT + frac * (currT - prevT);
+        break;
+      }
+      prevDist = currDist;
+      prevT = currT;
+    }
+
+    if (
+      tCp1 !== null &&
+      tCp2 !== null &&
+      tCp1 > 0.25 &&
+      tCp2 > tCp1 + 0.25 &&
+      totalLapTime > tCp2 + 0.25
+    ) {
+      return [
+        Number(tCp1.toFixed(3)),
+        Number((tCp2 - tCp1).toFixed(3)),
+        Number((totalLapTime - tCp2).toFixed(3)),
+      ];
+    }
+
+    const third = Number((totalLapTime / 3).toFixed(3));
+    return [third, third, Number((totalLapTime - third * 2).toFixed(3))];
+  }
+
+  function ensureGhostSectorMetadata(record) {
+    if (!record) return;
+    if (!Array.isArray(record.sectorTimes) || record.sectorTimes.length !== 3) {
+      const derived = extractSectorTimesFromFrames(
+        record.frames,
+        record.lapTime,
+        startFinishArc,
+        totalTrackLength
+      );
+      if (derived) {
+        record.sectorTimes = derived;
+      }
+    }
+    if (
+      (!Array.isArray(record.bestSectorTimes) || record.bestSectorTimes.length !== 3) &&
+      Array.isArray(record.sectorTimes)
+    ) {
+      record.bestSectorTimes = record.sectorTimes.slice();
+    }
+  }
+
   function loadTrackDataFromStorage(trackId) {
     bestLapData = null;
     lastRunData = null;
@@ -118,6 +204,7 @@ export function createGhostSystem(
       if (rawGhost) {
         const parsed = JSON.parse(rawGhost);
         if (isValidRecording(parsed, 'lapTime') && parsed.lapTime > 2.0) {
+          ensureGhostSectorMetadata(parsed);
           bestLapData = parsed;
         }
       }
@@ -200,7 +287,7 @@ export function createGhostSystem(
     };
   }
 
-  function setTrack(newTrackId, newTotalLength) {
+  function setTrack(newTrackId, newTotalLength, newStartFinishArc = 0.0) {
     if (replay.active) {
       stopReplay();
     }
@@ -208,6 +295,7 @@ export function createGhostSystem(
     if (newTotalLength) {
       totalTrackLength = newTotalLength;
     }
+    startFinishArc = newStartFinishArc || 0.0;
     currentLapFrames = [];
     currentRunFrames = [];
     lastLapRecordTime = -1;
@@ -455,14 +543,34 @@ export function createGhostSystem(
     }
   }
 
-  function onLapComplete(lapTime, vehicleMeta = activeRunVehicleMeta) {
+  function onLapComplete(lapTime, vehicleMeta = activeRunVehicleMeta, playerSectorTimes = null) {
     if (!lapTime || lapTime <= 2.0 || currentLapFrames.length < 10) {
       resetCurrentLapRecording();
       return { isNewRecord: false };
     }
 
     const previousBest = bestLapData ? bestLapData.lapTime : null;
+    const prevBestSectors =
+      bestLapData && Array.isArray(bestLapData.bestSectorTimes) && bestLapData.bestSectorTimes.length === 3
+        ? bestLapData.bestSectorTimes.slice()
+        : null;
+
+    const validPlayerSectors =
+      Array.isArray(playerSectorTimes) &&
+      playerSectorTimes.length === 3 &&
+      playerSectorTimes.every((v) => typeof v === 'number' && v > 0.1)
+        ? playerSectorTimes.map((v) => Number(v.toFixed(3)))
+        : extractSectorTimesFromFrames(currentLapFrames, lapTime, startFinishArc, totalTrackLength);
+
     const isNewRecord = previousBest === null || lapTime < previousBest - 0.005;
+
+    const mergedBestSectors = validPlayerSectors
+      ? validPlayerSectors.map((secVal, idx) =>
+          prevBestSectors && typeof prevBestSectors[idx] === 'number'
+            ? Number(Math.min(prevBestSectors[idx], secVal).toFixed(3))
+            : secVal
+        )
+      : prevBestSectors;
 
     if (isNewRecord) {
       const lastF = currentLapFrames[currentLapFrames.length - 1];
@@ -478,12 +586,23 @@ export function createGhostSystem(
         date: Date.now(),
         vehicleMode: vehicleMeta?.vehicleMode || activeRunVehicleMeta.vehicleMode || 'kart',
         characterId: vehicleMeta?.characterId || activeRunVehicleMeta.characterId || 'siamese',
+        sectorTimes: validPlayerSectors,
+        bestSectorTimes: mergedBestSectors,
         frames: currentLapFrames.slice(),
       };
 
       saveGhostToStorage();
       if (onRecordChangeCallback) {
         onRecordChangeCallback(bestLapData);
+      }
+    } else if (bestLapData && mergedBestSectors) {
+      // Even when overall lap isn't a record, update ghost best sector splits if any sector was faster
+      const updated = mergedBestSectors.some(
+        (val, idx) => !prevBestSectors || val < prevBestSectors[idx] - 0.001
+      );
+      if (updated) {
+        bestLapData.bestSectorTimes = mergedBestSectors;
+        saveGhostToStorage();
       }
     }
 
@@ -495,6 +614,9 @@ export function createGhostSystem(
       isNewRecord,
       previousBest,
       newBest: bestLapData ? bestLapData.lapTime : lapTime,
+      completedSectors: validPlayerSectors,
+      prevBestSectors,
+      newBestSectors: bestLapData ? bestLapData.bestSectorTimes : null,
     };
   }
 
@@ -774,6 +896,20 @@ export function createGhostSystem(
     return bestLapData ? bestLapData.lapTime : null;
   }
 
+  function getBestSectorTimes() {
+    if (!bestLapData) return null;
+    ensureGhostSectorMetadata(bestLapData);
+    return Array.isArray(bestLapData.bestSectorTimes)
+      ? bestLapData.bestSectorTimes.slice()
+      : null;
+  }
+
+  function getGhostLapSectorTimes() {
+    if (!bestLapData) return null;
+    ensureGhostSectorMetadata(bestLapData);
+    return Array.isArray(bestLapData.sectorTimes) ? bestLapData.sectorTimes.slice() : null;
+  }
+
   function hasGhost() {
     return Boolean(bestLapData && bestLapData.frames && bestLapData.frames.length > 5);
   }
@@ -790,6 +926,8 @@ export function createGhostSystem(
     setGhostEnabled,
     toggleGhostEnabled,
     getBestLapTime,
+    getBestSectorTimes,
+    getGhostLapSectorTimes,
     hasGhost,
     hasBestLap,
     hasLastRun,

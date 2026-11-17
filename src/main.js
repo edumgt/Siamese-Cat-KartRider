@@ -322,7 +322,17 @@ async function initApp() {
   }
   scene.add(driftParticles.group);
 
-  const ghostSystem = createGhostSystem(ghostKart, splineData.total_length_m || 3.8371, activeTrackId);
+  const initialSfIdx = splineData.start_finish_index ?? 0;
+  const initialStartFinishArc =
+    splineData.samples && splineData.samples[initialSfIdx]
+      ? splineData.samples[initialSfIdx].arc_length_m
+      : 0.0;
+  const ghostSystem = createGhostSystem(
+    ghostKart,
+    splineData.total_length_m || 3.8371,
+    activeTrackId,
+    initialStartFinishArc
+  );
   let trackGlbScene = null;
 
   // Pre-allocated 3D Coordinate Replay Trajectory Ribbon (shown during dedicated Ghost Replay Mode)
@@ -1045,6 +1055,9 @@ async function initApp() {
     if (hudMinimapWidget) hudMinimapWidget.classList.toggle('hidden', hideRacingHud);
     if (hudSpeedoGauge) hudSpeedoGauge.classList.toggle('hidden', hideRacingHud);
     if (hudLapWidget) hudLapWidget.classList.toggle('hidden', hideRacingHud);
+    if (hideRacingHud && typeof hideSectorSplitBanner === 'function') {
+      hideSectorSplitBanner();
+    }
 
     if (mode === 4) {
       // Mode 4: Helicopter Cam (Obstacle-Free Keyboard Heli 2 — Kart-Locked Aerial Heli in 100% obstacle-free front-upper airspace)
@@ -2008,6 +2021,71 @@ async function initApp() {
       strokeElevationTier(tier.min, tier.max, tier.side, 12.2, 4.0);
       strokeElevationTier(tier.min, tier.max, tier.shade, 12.0, 0.0);
     }
+
+    // Draw Start/Finish & Sector Checkpoints (CP1 at 1/3, CP2 at 2/3) on Minimap
+    const totLen = sData.total_length_m || 3.8371;
+    const sfIdx = (sData.start_finish_index ?? 0) % nPts;
+    const sfArc = pts[sfIdx] ? pts[sfIdx].arc_length_m : 0.0;
+
+    const findClosestSampleIdx = (targetArc) => {
+      let bestI = 0;
+      let bestD = Infinity;
+      for (let i = 0; i < nPts; i++) {
+        let diff = Math.abs(pts[i].arc_length_m - targetArc);
+        if (diff > totLen * 0.5) diff = totLen - diff;
+        if (diff < bestD) {
+          bestD = diff;
+          bestI = i;
+        }
+      }
+      return bestI;
+    };
+
+    const drawCheckpointTick = (sampleIdx, color, labelText, widthPx = 18) => {
+      const curr = p2d[sampleIdx];
+      const next = p2d[(sampleIdx + 3) % nPts];
+      const prev = p2d[(sampleIdx - 3 + nPts) % nPts];
+      if (!curr || !next || !prev) return;
+      const dx = next.x - prev.x;
+      const dy = next.y - prev.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+      const halfW = widthPx * 0.5;
+
+      bgCtx.save();
+      bgCtx.strokeStyle = 'rgba(4, 10, 20, 0.92)';
+      bgCtx.lineWidth = 7.0;
+      bgCtx.beginPath();
+      bgCtx.moveTo(curr.x - nx * halfW, curr.y - ny * halfW);
+      bgCtx.lineTo(curr.x + nx * halfW, curr.y + ny * halfW);
+      bgCtx.stroke();
+
+      bgCtx.strokeStyle = color;
+      bgCtx.lineWidth = 3.2;
+      bgCtx.beginPath();
+      bgCtx.moveTo(curr.x - nx * halfW, curr.y - ny * halfW);
+      bgCtx.lineTo(curr.x + nx * halfW, curr.y + ny * halfW);
+      bgCtx.stroke();
+
+      if (labelText) {
+        bgCtx.font = 'italic 800 13px Orbitron, sans-serif';
+        bgCtx.textAlign = 'center';
+        bgCtx.textBaseline = 'middle';
+        const lx = curr.x + nx * (halfW + 14);
+        const ly = curr.y + ny * (halfW + 14);
+        bgCtx.lineWidth = 3.5;
+        bgCtx.strokeStyle = 'rgba(4, 10, 20, 0.92)';
+        bgCtx.strokeText(labelText, lx, ly);
+        bgCtx.fillStyle = color;
+        bgCtx.fillText(labelText, lx, ly);
+      }
+      bgCtx.restore();
+    };
+
+    drawCheckpointTick(sfIdx, '#ffffff', '', 20);
+    drawCheckpointTick(findClosestSampleIdx((sfArc + totLen / 3) % totLen), '#ffd27d', 'S1', 16);
+    drawCheckpointTick(findClosestSampleIdx((sfArc + (totLen * 2) / 3) % totLen), '#00e5ff', 'S2', 16);
   }
 
   initMinimapCanvas(splineData);
@@ -2125,6 +2203,322 @@ async function initApp() {
   const elDriftPoints = document.getElementById('hud-drift-points');
   const elDriftBar = document.getElementById('hud-drift-bar');
   const elDriftMeta = document.getElementById('hud-drift-meta');
+
+  const elSectorStrip = document.getElementById('hud-sector-strip');
+  const elSecPills = [
+    document.getElementById('hud-sec-pill-0'),
+    document.getElementById('hud-sec-pill-1'),
+    document.getElementById('hud-sec-pill-2'),
+  ];
+  const elSecVals = [
+    document.getElementById('hud-sec-val-0'),
+    document.getElementById('hud-sec-val-1'),
+    document.getElementById('hud-sec-val-2'),
+  ];
+  const elSectorBanner = document.getElementById('hud-sector-split-banner');
+  const elSplitCpBadge = document.getElementById('hud-split-cp-badge');
+  const elSplitStatusTag = document.getElementById('hud-split-status-tag');
+  const elSplitLandmark = document.getElementById('hud-split-landmark');
+  const elSplitCurrTime = document.getElementById('hud-split-curr-time');
+  const elSplitDeltaPill = document.getElementById('hud-split-delta-pill');
+  const elSplitGhostTime = document.getElementById('hud-split-ghost-time');
+  const elSplitTimerBar = document.getElementById('hud-split-timer-bar');
+
+  // -------------------------------------------------------------------------
+  // REAL-TIME SECTOR SPLIT & CHECKPOINT COMPARISON SYSTEM
+  // -------------------------------------------------------------------------
+  const SECTOR_BANNER_DURATION = 2.6;
+  const sectorSplitState = {
+    currentSectorIdx: 0, // 0 = S1, 1 = S2, 2 = S3
+    sectorStartLapTime: 0.0,
+    completedSectors: [null, null, null],
+    completedStatuses: ['', '', ''], // 'purple' | 'ahead' | 'behind' | 'neutral'
+    prevLapDist: null,
+    prevLapTime: 0.0,
+    lastLapCount: 1,
+    bannerTimer: 0.0,
+    bannerVisible: false,
+    lastSecTexts: ['', '', ''],
+    lastSecClasses: ['', '', ''],
+    lastBarPct: -1,
+    stripHidden: false,
+  };
+
+  function formatSectorSeconds(sec) {
+    const centis = Math.max(0, Math.round((sec || 0) * 100));
+    const wholeSec = Math.floor(centis / 100);
+    const cc = centis % 100;
+    if (wholeSec >= 60) {
+      const mins = Math.floor(wholeSec / 60);
+      const rem = wholeSec % 60;
+      return `${mins}:${String(rem).padStart(2, '0')}.${String(cc).padStart(2, '0')}`;
+    }
+    return `${String(wholeSec).padStart(2, '0')}.${String(cc).padStart(2, '0')}`;
+  }
+
+  function getLapProgressDist(arcS, sfArc, totalLen) {
+    return (((arcS - sfArc) % totalLen) + totalLen) % totalLen;
+  }
+
+  function getCheckpointLandmarkLabel(sectorIdx) {
+    const timing = physics.getTrackTimingInfo ? physics.getTrackTimingInfo() : null;
+    const totalLen = timing ? timing.totalLength : splineData.total_length_m || 3.8371;
+    const sfArc = timing ? timing.startFinishArc : 0.0;
+    const frac = sectorIdx === 0 ? 1 / 3 : sectorIdx === 1 ? 2 / 3 : 0.99;
+    const targetArc = (sfArc + totalLen * frac) % totalLen;
+    const samples = splineData.samples || [];
+    let bestSectorId = (sectorIdx * 2) + 1;
+    let bestDiff = Infinity;
+    for (let i = 0; i < samples.length; i++) {
+      let d = Math.abs(samples[i].arc_length_m - targetArc);
+      if (d > totalLen * 0.5) d = totalLen - d;
+      if (d < bestDiff) {
+        bestDiff = d;
+        bestSectorId = samples[i].sector;
+      }
+    }
+    const secMeta = (splineData.sectors || []).find((s) => s.id === bestSectorId);
+    if (secMeta && secMeta.name) {
+      return secMeta.name;
+    }
+    return `TRACK CHECKPOINT ${sectorIdx + 1}`;
+  }
+
+  function hideSectorSplitBanner() {
+    sectorSplitState.bannerTimer = 0.0;
+    sectorSplitState.bannerVisible = false;
+    if (elSectorBanner) {
+      elSectorBanner.classList.add('hidden');
+    }
+  }
+
+  function resetCurrentLapSectorTracking() {
+    sectorSplitState.currentSectorIdx = 0;
+    sectorSplitState.sectorStartLapTime = 0.0;
+    sectorSplitState.completedSectors = [null, null, null];
+    sectorSplitState.completedStatuses = ['', '', ''];
+    sectorSplitState.prevLapDist = null;
+    sectorSplitState.prevLapTime = 0.0;
+  }
+
+  function resetAllSectorSplits() {
+    resetCurrentLapSectorTracking();
+    sectorSplitState.lastLapCount = 1;
+    hideSectorSplitBanner();
+  }
+
+  function evaluateSectorComparison(sectorDuration, ghostBestSec, ghostLapSec) {
+    if (typeof ghostBestSec === 'number' && ghostBestSec > 0.1) {
+      const delta = sectorDuration - ghostBestSec;
+      if (delta < -0.005) {
+        return { delta, status: 'purple', tag: 'NEW BEST', isFaster: true, isPurple: true };
+      }
+      if (typeof ghostLapSec === 'number' && sectorDuration <= ghostLapSec + 0.005) {
+        return { delta, status: 'ahead', tag: 'FASTER', isFaster: true, isPurple: false };
+      }
+      return { delta, status: 'behind', tag: 'SLOWER', isFaster: false, isPurple: false };
+    }
+    return { delta: null, status: 'neutral', tag: 'BASELINE', isFaster: null, isPurple: false };
+  }
+
+  function triggerSectorSplitBanner(
+    sectorIdx,
+    sectorDuration,
+    ghostBestSec,
+    ghostLapSec,
+    isFinishCrossing = false
+  ) {
+    const cmp = evaluateSectorComparison(sectorDuration, ghostBestSec, ghostLapSec);
+    sectorSplitState.completedStatuses[sectorIdx] = cmp.status;
+
+    if (audioSynth.playCheckpointChime && !isFinishCrossing) {
+      audioSynth.playCheckpointChime(cmp.isFaster, cmp.isPurple);
+    }
+
+    if (!elSectorBanner) return;
+
+    if (elSplitCpBadge) {
+      elSplitCpBadge.textContent = isFinishCrossing
+        ? `FINISH · SECTOR 3`
+        : `CHECKPOINT ${sectorIdx + 1} · SECTOR ${sectorIdx + 1}`;
+    }
+    if (elSplitStatusTag) {
+      elSplitStatusTag.textContent = cmp.tag;
+    }
+    if (elSplitLandmark) {
+      elSplitLandmark.textContent = getCheckpointLandmarkLabel(sectorIdx);
+    }
+    if (elSplitCurrTime) {
+      elSplitCurrTime.textContent = `${formatSectorSeconds(sectorDuration)}s`;
+    }
+    if (elSplitGhostTime) {
+      elSplitGhostTime.textContent =
+        typeof ghostBestSec === 'number' && ghostBestSec > 0.1
+          ? `${formatSectorSeconds(ghostBestSec)}s`
+          : '--.--s';
+    }
+    if (elSplitDeltaPill) {
+      if (cmp.delta !== null) {
+        const sign = cmp.delta <= 0 ? '-' : '+';
+        elSplitDeltaPill.textContent = `${sign}${Math.abs(cmp.delta).toFixed(2)}s`;
+      } else {
+        elSplitDeltaPill.textContent = 'NO GHOST';
+      }
+    }
+
+    elSectorBanner.dataset.status = cmp.status;
+    sectorSplitState.bannerTimer = SECTOR_BANNER_DURATION;
+    sectorSplitState.bannerVisible = true;
+    sectorSplitState.lastBarPct = 100;
+    if (elSplitTimerBar) {
+      elSplitTimerBar.style.width = '100%';
+    }
+
+    elSectorBanner.classList.add('hidden');
+    if (activeCameraMode === 1 || activeCameraMode === 2) {
+      void elSectorBanner.offsetWidth;
+      elSectorBanner.classList.remove('hidden');
+    }
+  }
+
+  function stepSectorSplits(dt, st) {
+    const is1P = activeCameraMode === 1 || activeCameraMode === 2;
+    const isReplaying = ghostSystem.isReplayActive();
+    const isPAuto = Boolean(st.autopilot && !st.victoryCruise);
+    const shouldShowStrip = is1P && !isReplaying && !isPAuto && !st.raceFinished;
+
+    if (elSectorStrip && shouldShowStrip === sectorSplitState.stripHidden) {
+      sectorSplitState.stripHidden = !shouldShowStrip;
+      elSectorStrip.classList.toggle('hidden', !shouldShowStrip);
+    }
+
+    if (sectorSplitState.bannerVisible) {
+      sectorSplitState.bannerTimer = Math.max(0.0, sectorSplitState.bannerTimer - dt);
+      if (sectorSplitState.bannerTimer <= 0.0 || !is1P || isReplaying || isPAuto) {
+        hideSectorSplitBanner();
+      } else if (elSplitTimerBar) {
+        const barPct = Math.round((sectorSplitState.bannerTimer / SECTOR_BANNER_DURATION) * 100);
+        if (barPct !== sectorSplitState.lastBarPct) {
+          sectorSplitState.lastBarPct = barPct;
+          elSplitTimerBar.style.width = `${barPct}%`;
+        }
+      }
+    }
+
+    if (!shouldShowStrip) {
+      return;
+    }
+
+    const timing = physics.getTrackTimingInfo ? physics.getTrackTimingInfo() : null;
+    const totalLen = timing ? timing.totalLength : splineData.total_length_m || 3.8371;
+    const sfArc = timing ? timing.startFinishArc : 0.0;
+    const cp1Dist = totalLen / 3;
+    const cp2Dist = (totalLen * 2) / 3;
+
+    const ghostBestSectors = ghostSystem.getBestSectorTimes ? ghostSystem.getBestSectorTimes() : null;
+    const ghostLapSectors = ghostSystem.getGhostLapSectorTimes
+      ? ghostSystem.getGhostLapSectorTimes()
+      : null;
+
+    const isActivelyTiming = !st.countdownLocked && st.raceClockActive && st.lapCount >= 1;
+    if (isActivelyTiming) {
+      const lapTime = st.currentLapTime || 0.0;
+      let lapDist = getLapProgressDist(st.s, sfArc, totalLen);
+      if (sectorSplitState.currentSectorIdx === 0 && lapTime < 2.2 && lapDist > totalLen * 0.82) {
+        lapDist -= totalLen;
+      }
+
+      if (
+        sectorSplitState.currentSectorIdx === 0 &&
+        sectorSplitState.prevLapDist !== null &&
+        sectorSplitState.prevLapDist < cp1Dist &&
+        lapDist >= cp1Dist &&
+        lapDist < totalLen * 0.72
+      ) {
+        const span = Math.max(1e-6, lapDist - sectorSplitState.prevLapDist);
+        const frac = THREE.MathUtils.clamp((cp1Dist - sectorSplitState.prevLapDist) / span, 0, 1);
+        const exactCp1Time =
+          sectorSplitState.prevLapTime + frac * (lapTime - sectorSplitState.prevLapTime);
+        const sec1Dur = Math.max(0.1, exactCp1Time);
+        sectorSplitState.completedSectors[0] = sec1Dur;
+        sectorSplitState.sectorStartLapTime = exactCp1Time;
+        sectorSplitState.currentSectorIdx = 1;
+        triggerSectorSplitBanner(
+          0,
+          sec1Dur,
+          ghostBestSectors ? ghostBestSectors[0] : null,
+          ghostLapSectors ? ghostLapSectors[0] : null,
+          false
+        );
+      } else if (
+        sectorSplitState.currentSectorIdx === 1 &&
+        sectorSplitState.prevLapDist !== null &&
+        sectorSplitState.prevLapDist < cp2Dist &&
+        lapDist >= cp2Dist &&
+        lapDist < totalLen * 0.98
+      ) {
+        const span = Math.max(1e-6, lapDist - sectorSplitState.prevLapDist);
+        const frac = THREE.MathUtils.clamp((cp2Dist - sectorSplitState.prevLapDist) / span, 0, 1);
+        const exactCp2Time =
+          sectorSplitState.prevLapTime + frac * (lapTime - sectorSplitState.prevLapTime);
+        const sec2Dur = Math.max(0.1, exactCp2Time - sectorSplitState.sectorStartLapTime);
+        sectorSplitState.completedSectors[1] = sec2Dur;
+        sectorSplitState.sectorStartLapTime = exactCp2Time;
+        sectorSplitState.currentSectorIdx = 2;
+        triggerSectorSplitBanner(
+          1,
+          sec2Dur,
+          ghostBestSectors ? ghostBestSectors[1] : null,
+          ghostLapSectors ? ghostLapSectors[1] : null,
+          false
+        );
+      }
+
+      sectorSplitState.prevLapDist = lapDist;
+      sectorSplitState.prevLapTime = lapTime;
+    }
+
+    // Update live 3-pill strip in top-right HUD
+    const activeIdx = sectorSplitState.currentSectorIdx;
+    const liveSecElapsed = isActivelyTiming
+      ? Math.max(0.0, (st.currentLapTime || 0.0) - sectorSplitState.sectorStartLapTime)
+      : 0.0;
+
+    for (let i = 0; i < 3; i++) {
+      const pill = elSecPills[i];
+      const valEl = elSecVals[i];
+      if (!pill || !valEl) continue;
+
+      let textStr = '--.--';
+      let cls = 'sector-pill';
+
+      if (i < activeIdx && sectorSplitState.completedSectors[i] !== null) {
+        const doneDur = sectorSplitState.completedSectors[i];
+        const statusCls = sectorSplitState.completedStatuses[i] || 'neutral';
+        cls += ` status-${statusCls}`;
+        if (ghostBestSectors && typeof ghostBestSectors[i] === 'number') {
+          const d = doneDur - ghostBestSectors[i];
+          textStr = `${d <= 0 ? '-' : '+'}${Math.abs(d).toFixed(2)}`;
+        } else {
+          textStr = formatSectorSeconds(doneDur);
+        }
+      } else if (i === activeIdx) {
+        cls += ' active';
+        textStr = formatSectorSeconds(liveSecElapsed);
+      } else if (ghostBestSectors && typeof ghostBestSectors[i] === 'number') {
+        textStr = formatSectorSeconds(ghostBestSectors[i]);
+      }
+
+      if (textStr !== sectorSplitState.lastSecTexts[i]) {
+        sectorSplitState.lastSecTexts[i] = textStr;
+        valEl.textContent = textStr;
+      }
+      if (cls !== sectorSplitState.lastSecClasses[i]) {
+        sectorSplitState.lastSecClasses[i] = cls;
+        pill.className = cls;
+      }
+    }
+  }
 
   // -------------------------------------------------------------------------
   // DRIFT SCORE & MULTIPLIER SYSTEM (Rewards Long, Continuous Drifts)
@@ -2497,16 +2891,39 @@ async function initApp() {
       vehicleMode: activeVehicleMode,
       characterId: activeCharacterId,
     };
-    const ghostRes = ghostSystem.onLapComplete(lapTime, vehicleMeta);
+    const sec3Dur = Math.max(0.1, lapTime - (sectorSplitState.sectorStartLapTime || 0.0));
+    const lapSectors = [
+      sectorSplitState.completedSectors[0] ?? Number((lapTime / 3).toFixed(3)),
+      sectorSplitState.completedSectors[1] ?? Number((lapTime / 3).toFixed(3)),
+      Number(sec3Dur.toFixed(3)),
+    ];
+    const prevGhostBestSectors = ghostSystem.getBestSectorTimes
+      ? ghostSystem.getBestSectorTimes()
+      : null;
+    const prevGhostLapSectors = ghostSystem.getGhostLapSectorTimes
+      ? ghostSystem.getGhostLapSectorTimes()
+      : null;
+
+    const ghostRes = ghostSystem.onLapComplete(lapTime, vehicleMeta, lapSectors);
     if (isFinish) {
       const finalTotal =
         totalTime ?? physics.state.finishTotalTime ?? physics.state.totalRaceTime ?? lapTime;
       ghostSystem.onRaceComplete(finalTotal, vehicleMeta);
+      resetAllSectorSplits();
       showFinishOverlay(finalTotal, bestLap ?? lapTime, true, ghostRes);
     } else {
       audioSynth.playLapChime();
       const lapNum = completedLapNum || Math.max(1, (physics.state.lapCount || 2) - 1);
       showLapSplit(lapNum, lapTime, ghostRes);
+      triggerSectorSplitBanner(
+        2,
+        sec3Dur,
+        prevGhostBestSectors ? prevGhostBestSectors[2] : null,
+        prevGhostLapSectors ? prevGhostLapSectors[2] : null,
+        true
+      );
+      resetCurrentLapSectorTracking();
+      sectorSplitState.lastLapCount = physics.state.lapCount || lapNum + 1;
     }
     if (typeof syncReplayAvailabilityButtons === 'function') {
       syncReplayAvailabilityButtons();
@@ -2526,6 +2943,7 @@ async function initApp() {
     if (isAuto) {
       hideFinishOverlay();
       hideLapSplit();
+      resetAllSectorSplits();
       cancelF1StartCountdown();
     }
   });
@@ -2606,6 +3024,7 @@ async function initApp() {
       driftParticles.reset();
     }
     resetDriftScore(true);
+    resetAllSectorSplits();
 
     f1CountdownState.active = true;
     f1CountdownState.elapsed = 0.0;
@@ -2954,6 +3373,7 @@ async function initApp() {
     hideWelcomeDialog();
     hideFinishOverlay();
     hideLapSplit();
+    resetAllSectorSplits();
     ghostSystem.resetAllRecordings();
     startF1StartCountdown();
   }
@@ -3125,9 +3545,15 @@ async function initApp() {
       driftParticles.reset();
     }
     resetDriftScore(true);
+    resetAllSectorSplits();
 
     // Switch Ghost Car system to track-specific recording and ghost model
-    const trackBestLap = ghostSystem.setTrack(newTrackId, newSplineData.total_length_m);
+    const nextTimingInfo = physics.getTrackTimingInfo ? physics.getTrackTimingInfo() : null;
+    const trackBestLap = ghostSystem.setTrack(
+      newTrackId,
+      nextTimingInfo ? nextTimingInfo.totalLength : newSplineData.total_length_m,
+      nextTimingInfo ? nextTimingInfo.startFinishArc : 0.0
+    );
 
     // Re-project minimap radar for the new circuit
     initMinimapCanvas(newSplineData);
@@ -3544,6 +3970,7 @@ async function initApp() {
       driftParticles.reset();
     }
     resetDriftScore(false);
+    resetAllSectorSplits();
     refreshReplayTrailGeometry();
     syncReplayDockUI();
     return true;
@@ -3780,6 +4207,7 @@ async function initApp() {
         hideWelcomeDialog();
         hideFinishOverlay();
         hideLapSplit();
+        resetAllSectorSplits();
         ghostSystem.resetAllRecordings();
         startF1StartCountdown();
       }
@@ -3793,6 +4221,7 @@ async function initApp() {
       cancelF1StartCountdown();
       ghostSystem.resetAllRecordings();
       resetDriftScore(true);
+      resetAllSectorSplits();
     }
   });
 
@@ -4234,9 +4663,10 @@ async function initApp() {
                          0.0042 * activeDofScale;
     }
 
-    // 5. Update WebAudio Synth, Drift Score Multiplier & HUD
+    // 5. Update WebAudio Synth, Drift Score Multiplier, Sector Splits & HUD
     audioSynth.update(st);
     stepDriftScore(isScreenshotMode ? 0.0 : dt, st);
+    stepSectorSplits(isScreenshotMode ? 0.0 : dt, st);
     updateHUD(st);
 
     if (isScreenshotMode) {

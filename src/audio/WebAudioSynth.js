@@ -889,6 +889,51 @@ export function createDeskRacerHybridAudio(options = {}) {
     });
   }
 
+  /**
+   * Plays a crisp, brief motorsport telemetry chime when crossing a track
+   * sector checkpoint (uplifting two-tone ping when faster than Ghost, subtle
+   * single telemetry tone otherwise).
+   */
+  function playCheckpointChime(isFaster = null, isPurpleBest = false) {
+    if (!enabled || !ctx || ctx.state !== 'running') return;
+    const now = ctx.currentTime;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 4200;
+    filter.connect(masterGain);
+
+    const notes =
+      isFaster === true
+        ? isPurpleBest
+          ? [
+              { freq: 880.0, start: 0.0, dur: 0.09, gain: 0.13 },
+              { freq: 1318.5, start: 0.065, dur: 0.16, gain: 0.14 },
+            ]
+          : [
+              { freq: 783.99, start: 0.0, dur: 0.09, gain: 0.12 },
+              { freq: 1174.66, start: 0.065, dur: 0.14, gain: 0.13 },
+            ]
+        : isFaster === false
+          ? [{ freq: 587.33, start: 0.0, dur: 0.11, gain: 0.10 }]
+          : [{ freq: 740.0, start: 0.0, dur: 0.11, gain: 0.11 }];
+
+    notes.forEach(({ freq, start, dur, gain }) => {
+      const t0 = now + start;
+      const osc = ctx.createOscillator();
+      const env = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t0);
+      env.gain.setValueAtTime(0.0001, t0);
+      env.gain.linearRampToValueAtTime(gain, t0 + 0.008);
+      env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(env);
+      env.connect(filter);
+      osc.start(t0);
+      osc.stop(t0 + dur + 0.02);
+    });
+  }
+
   return {
     preload,
     toggle,
@@ -898,6 +943,7 @@ export function createDeskRacerHybridAudio(options = {}) {
     playRaceFinishFanfare,
     playRailImpact,
     playF1CountdownBeep,
+    playCheckpointChime,
     triggerSputterBurst,
     setRumbleAmount: (v) => {
       userRumbleAmount = Math.max(0.0, Math.min(2.5, Number(v)));

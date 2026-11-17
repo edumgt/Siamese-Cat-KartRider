@@ -1161,6 +1161,12 @@ export async function createKartPhysicsController(splineData, manifest, roadGeo)
     setTouchKey,
     clearTouchKeys,
     notifyLightsOut,
+    getTrackTimingInfo: () => ({
+      totalLength,
+      startFinishArc,
+      startFinishIdx,
+      sectorStartArcs: { ...sectorStartArcs },
+    }),
     onLapComplete: (cb) => {
       onLapCompleteCallback = cb;
     },

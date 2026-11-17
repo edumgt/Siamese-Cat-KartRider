@@ -95,6 +95,20 @@
                 <span id="hud-ghost-time" class="hud-ghost-time">--:--.--</span>
                 <span id="hud-ghost-delta" class="hud-ghost-delta hidden">Δ +0.00</span>
               </div>
+              <div id="hud-sector-strip" class="hud-sector-strip" aria-label="Real-time sector splits vs Ghost best">
+                <div class="sector-pill active" id="hud-sec-pill-0">
+                  <span class="sec-code">S1</span>
+                  <span class="sec-val" id="hud-sec-val-0">00.00</span>
+                </div>
+                <div class="sector-pill" id="hud-sec-pill-1">
+                  <span class="sec-code">S2</span>
+                  <span class="sec-val" id="hud-sec-val-1">--.--</span>
+                </div>
+                <div class="sector-pill" id="hud-sec-pill-2">
+                  <span class="sec-code">S3</span>
+                  <span class="sec-val" id="hud-sec-val-2">--.--</span>
+                </div>
+              </div>
               <div id="hud-lap-split" class="hud-lap-split hidden"></div>
             </div>
 
@@ -159,8 +173,10 @@
           <div id="welcome-eyebrow" class="welcome-eyebrow">DESK GRAND PRIX &amp; MOUNTAIN BIKE TRAIL · 3 LAPS</div>
           <h1 id="welcome-title" class="welcome-title">DESK RACER</h1>
 
-          <!-- Ride Mode Selection Block (Animal Kart vs Mountain Bike) -->
-          <div class="welcome-section-group">
+          <div class="welcome-main-layout">
+            <div class="welcome-col-left">
+              <!-- Ride Mode Selection Block (Animal Kart vs Mountain Bike) -->
+              <div class="welcome-section-group">
             <div class="welcome-control-label">RIDE MODE / 탑승 선택 <kbd class="welcome-inline-kbd">V</kbd></div>
             <div class="vehicle-cards-grid" id="welcome-vehicle-cards">
               <div class="vehicle-select-card active" data-vehicle="kart" role="button" tabindex="0">
@@ -325,12 +341,14 @@
                 <div class="mtb-banner-sub">풀서스펜션 29" MTB · 페달링 &amp; 코너 린 인 물리 적용 · 설악산 MTB 1코스 자동 선택</div>
               </div>
             </div>
+            </div>
           </div>
 
-          <div class="welcome-controls-grid">
-            <!-- WASD Controls -->
-            <div class="welcome-control-block">
-              <div class="welcome-control-label">CONTROLS</div>
+            <div class="welcome-col-right">
+              <div class="welcome-controls-grid">
+                <!-- WASD Controls -->
+                <div class="welcome-control-block">
+                  <div class="welcome-control-label">CONTROLS</div>
               <div class="control-keys-list" aria-label="WASD Controls">
                 <div class="control-key-row">
                   <div class="control-kbd-pair">
@@ -374,6 +392,8 @@
                 <div class="cam-key-row cam-pill" data-cam="2"><kbd class="welcome-key welcome-key-cyan">2</kbd><span>COCKPIT</span></div>
                 <div class="cam-key-row cam-pill" data-cam="3"><kbd class="welcome-key welcome-key-cyan">3</kbd><span>FULL DESK VIEW</span></div>
                 <div class="cam-key-row cam-pill" data-cam="4"><kbd class="welcome-key welcome-key-cyan">4</kbd><span>DRONE VIEW</span></div>
+              </div>
+            </div>
               </div>
             </div>
           </div>
@@ -437,6 +457,29 @@
               <kbd class="welcome-enter-kbd">ESC</kbd>
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- Real-Time Checkpoint Sector Split Comparison Banner -->
+      <div id="hud-sector-split-banner" class="hud-sector-split-banner hidden" data-status="neutral" aria-live="polite" aria-atomic="true">
+        <div class="sector-split-header">
+          <span id="hud-split-cp-badge" class="sector-split-cp-badge">CP 1 · SECTOR 1</span>
+          <span id="hud-split-status-tag" class="sector-split-status-tag">SPLIT</span>
+        </div>
+        <div id="hud-split-landmark" class="sector-split-landmark">SECTOR CHECKPOINT</div>
+        <div class="sector-split-times-row">
+          <div class="sector-split-col">
+            <span class="sector-split-col-label">SECTOR TIME</span>
+            <span id="hud-split-curr-time" class="sector-split-curr-time">00.00s</span>
+          </div>
+          <div id="hud-split-delta-pill" class="sector-split-delta-pill">+0.00s</div>
+          <div class="sector-split-col sector-split-col-right">
+            <span class="sector-split-col-label">GHOST BEST</span>
+            <span id="hud-split-ghost-time" class="sector-split-ghost-time">--.--s</span>
+          </div>
+        </div>
+        <div class="sector-split-timer-track" aria-hidden="true">
+          <div id="hud-split-timer-bar" class="sector-split-timer-bar"></div>
         </div>
       </div>
 

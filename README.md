@@ -3,6 +3,8 @@
 [English](README.md) · [한국어](README.ko.md)
 
 > **▶ [Play the live demo](https://edumgt.github.io/Siamese-Cat-KartRider/)** — Race a Siamese-cat kart or mountain bike directly in your browser.
+>
+> Enjoyed the race? Please give the project a ⭐ **Star** — it helps others discover the demo.
 
 A browser time trial rendered with **Three.js** and **WebGL2**. You race a 1:87 Siamese-cat kart, or a mountain bike, on closed spline circuits: a night desk diorama, the Taean west coast, Mt. Seoraksan, and Hallasan. Scenic tracks, vehicles, and most props are procedural JavaScript meshes. Optional GLBs load through a Vite proxy when the CDN is reachable.
 

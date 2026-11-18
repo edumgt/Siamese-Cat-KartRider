@@ -60,6 +60,8 @@ const gstaticModelsProxy = {
 };
 
 export default defineConfig({
+  // GitHub Pages serves project sites below the repository name.
+  base: process.env.GITHUB_ACTIONS ? '/Siamese-Cat-KartRider/' : '/',
   plugins: [fetchGstaticModelsOnBuild()],
   server: {
     port: 3000,

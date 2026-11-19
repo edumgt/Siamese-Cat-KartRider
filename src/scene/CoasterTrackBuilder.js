@@ -7,6 +7,7 @@ import { buildCountrysideScenery } from './CountrysideSceneryBuilder.js';
 import { buildJejuHallasanScenery } from './JejuHallasanSceneryBuilder.js';
 import { buildTaeanCoastScenery } from './TaeanCoastSceneryBuilder.js';
 import { buildSeoraksanMtbScenery } from './SeoraksanMtbSceneryBuilder.js';
+import { buildYeongamF1Scenery } from './YeongamF1SceneryBuilder.js';
 
 let cachedSplineSamples = null;
 let cachedV4TrackTextures = null;
@@ -795,6 +796,7 @@ export function buildCoasterTrack(splineData) {
   const isHallasan = splineData && splineData.id === 'hallasan';
   const isTaean = splineData && splineData.id === 'taean';
   const isSeoraksan = splineData && splineData.id === 'seoraksan';
+  const isYeongam = splineData && splineData.id === 'yeongam';
 
   let redColor = new THREE.Color(0xe8251a);
   let whiteColor = new THREE.Color(0xf5f7fa);
@@ -816,6 +818,10 @@ export function buildCoasterTrack(splineData) {
     redColor = new THREE.Color(0xb4532a); // Earthy Seoraksan MTB Terracotta Trail Curb
     whiteColor = new THREE.Color(0xdad4c8); // Pale Ulsanbawi Granite Rock
     silverRailColor = new THREE.Color(0x4e3629); // Alpine Timber Log Guardrail
+  } else if (isYeongam) {
+    redColor = new THREE.Color(0xe10600); // Official FIA Formula 1 Crimson Red Curb
+    whiteColor = new THREE.Color(0xf8fafc); // High-Contrast FIA Pure White Curb
+    silverRailColor = new THREE.Color(0xdbe4f0); // Brushed FIA Armco / Tecpro Safety Rail
   }
 
   let cVertOffset = 0;
@@ -1617,6 +1623,11 @@ export function buildCoasterTrack(splineData) {
     const seoraksanScenery = buildSeoraksanMtbScenery(splineData);
     trackGroup.add(seoraksanScenery);
     trackGroup.userData.seoraksanScenery = seoraksanScenery;
+  }
+  if (splineData && splineData.id === 'yeongam') {
+    const yeongamScenery = buildYeongamF1Scenery(splineData);
+    trackGroup.add(yeongamScenery);
+    trackGroup.userData.yeongamScenery = yeongamScenery;
   }
 
   return {

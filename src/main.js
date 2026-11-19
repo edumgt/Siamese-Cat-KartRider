@@ -230,10 +230,10 @@ async function initApp() {
   const classicSplineData = await splineRes.json();
 
   let activeTrackId = localStorage.getItem('desk_racer_active_track');
-  if (!activeTrackId || !TRACK_DEFINITIONS.some((t) => t.id === activeTrackId) || activeTrackId === 'classic') {
-    activeTrackId = 'taean';
+  if (!activeTrackId || !TRACK_DEFINITIONS.some((t) => t.id === activeTrackId)) {
+    activeTrackId = 'yeongam';
     try {
-      localStorage.setItem('desk_racer_active_track', 'taean');
+      localStorage.setItem('desk_racer_active_track', 'yeongam');
     } catch (_e) {}
   }
   let splineData = getTrackSplineData(activeTrackId, classicSplineData);
@@ -292,6 +292,9 @@ async function initApp() {
   } else if (activeTrackId === 'seoraksan') {
     if (scene.fog) scene.fog.color.setHex(0x222634);
     scene.background.setHex(0x1d212e);
+  } else if (activeTrackId === 'yeongam') {
+    if (scene.fog) scene.fog.color.setHex(0x141b2c);
+    scene.background.setHex(0x101624);
   }
   scene.add(coaster.trackGroup);
   if (coaster.underTrackLedGroup) {
@@ -3558,8 +3561,11 @@ async function initApp() {
     // Re-project minimap radar for the new circuit
     initMinimapCanvas(newSplineData);
 
-    // Adjust atmosphere tone for Jeju Mt. Hallasan / Taean West Coast / Mt. Seoraksan MTB circuits
-    if (newTrackId === 'hallasan') {
+    // Adjust atmosphere tone for Yeongam F1 / Jeju Mt. Hallasan / Taean West Coast / Mt. Seoraksan MTB circuits
+    if (newTrackId === 'yeongam') {
+      if (scene.fog) scene.fog.color.setHex(0x141b2c);
+      scene.background.setHex(0x101624);
+    } else if (newTrackId === 'hallasan') {
       if (scene.fog) scene.fog.color.setHex(0x192434);
       scene.background.setHex(0x151f2d);
     } else if (newTrackId === 'taean') {
@@ -4593,6 +4599,9 @@ async function initApp() {
     }
     if (coaster?.trackGroup?.userData?.seoraksanScenery?.userData?.update) {
       coaster.trackGroup.userData.seoraksanScenery.userData.update(elapsedTime, dt);
+    }
+    if (coaster?.trackGroup?.userData?.yeongamScenery?.userData?.update) {
+      coaster.trackGroup.userData.yeongamScenery.userData.update(elapsedTime, dt);
     }
 
     // 4. Update Camera (Chase / Visor POV / Diorama / Helicopter / Inspector / Course Pan / Room Panorama / Gemini 4 Dresser / Keyboard Heli)

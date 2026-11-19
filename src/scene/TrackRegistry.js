@@ -6,6 +6,30 @@ import * as THREE from 'three';
  */
 export const TRACK_DEFINITIONS = [
   {
+    id: 'yeongam',
+    name: 'Yeongam F1 Circuit',
+    nameKr: '전남 영암 F1 경기장',
+    tagline: 'Korea International Circuit · Hanok Grandstand & Marina GP',
+    taglineKr: '영암 국제자동차경주장 · 한옥 기와 그랜드스탠드 & 영산호 마리나 F1',
+    icon: '🏁',
+    difficulty: 'FIA Grade 1',
+    difficultyKr: 'F1 그랑프리',
+    lengthM: 2.92,
+    turns: 18,
+    color: '#e10600',
+    badgeText: 'KOREA F1 GP',
+    description: 'Korea\'s FIA Grade-1 Grand Prix circuit in Yeongam, Jeollanam-do featuring the iconic Korean Hanok Giwa-roof main grandstand, 8-bay F1 pit garages, Race Control tower, long DRS back straight overpass, Turn 3 hairpin, high-speed flowing esses, and Yeongsan Lake marina complex.',
+    descriptionKr: '전라남도 영암의 한국 국제자동차경주장(KIC) F1 서킷! 세계적으로 유명한 전통 한옥 기와지붕 메인 그랜드스탠드, 8개 팀 피트 개러지, 레이스 컨트롤 타워와 순위 전광판, 장거리 DRS 백스트레이트 오버패스, 턴3 헤어핀과 영산호 마리나 요트 구간을 질주합니다.',
+    sectors: [
+      { id: 1, name: 'Main Pit Straight & Hanok Grandstand (메인 스트레이트 · 한옥 그랜드스탠드)' },
+      { id: 2, name: 'Turn 1–2 Uphill Braking Complex (턴 1–2 업힐 브레이킹)' },
+      { id: 3, name: 'Long DRS Back Straight & Turn 3 Hairpin (장거리 DRS 백스트레이트 & 턴 3 헤어핀)' },
+      { id: 4, name: 'Sector 2 High-Speed Flowing Esses (섹터 2 고속 연속 S코너)' },
+      { id: 5, name: 'Yeongsan Lake Marina Harbor Complex (영산호 마리나 하버 구간)' },
+      { id: 6, name: 'Pit Entry & Final Grandstand Sweeper (피트 진입 & 파이널 코너)' },
+    ],
+  },
+  {
     id: 'seoraksan',
     name: 'Mt. Seoraksan MTB',
     nameKr: '설악산 산악자전거 1코스',
@@ -257,7 +281,7 @@ function buildSplineDataFromControlPoints(def, controlPoints, startFinishIdx = 0
     id: def.id,
     name: def.name,
     is_closed_periodic_loop: true,
-    track_width_m: def.id === 'countryside' ? 0.024 : (def.id === 'hallasan' || def.id === 'taean' || def.id === 'seoraksan' ? 0.0235 : 0.022),
+    track_width_m: def.id === 'yeongam' ? 0.0245 : (def.id === 'countryside' ? 0.024 : (def.id === 'hallasan' || def.id === 'taean' || def.id === 'seoraksan' ? 0.0235 : 0.022)),
     curb_width_m: def.id === 'countryside' ? 0.0028 : (def.id === 'hallasan' || def.id === 'taean' || def.id === 'seoraksan' ? 0.0026 : 0.0025),
     rail_height_m: 0.0035,
     total_length_m: Number(totalLength.toFixed(4)),
@@ -492,8 +516,54 @@ const SEORAKSAN_CONTROL_POINTS = [
 ];
 
 /**
+ * 7. YEONGAM F1 CIRCUIT (전남 영암 F1 국제자동차경주장 · Korea International Circuit)
+ * Iconic FIA Grade-1 layout adapted to desk diorama bounds:
+ *  - Sector 1: Arrow-straight Main Pit Straight past the Hanok Giwa-roof Grandstand & Pit Garages
+ *  - Sector 2: Turn 1–2 uphill braking zone & sweeping climb
+ *  - Sector 3: Long 1.2km-style DRS Back Straight under KOREA GRAND PRIX overpass into Turn 3 hairpin
+ *  - Sector 4: Technical Sector 2 flowing high-speed S-esses
+ *  - Sector 5: Yeongsan Lake Marina waterfront stadium bends
+ *  - Sector 6: Fast Pit Entry & Final Sweeper onto the Main Straight
+ */
+const YEONGAM_CONTROL_POINTS = [
+  // Sector 1: Main Pit Straight (Hanok Grandstand on +Z left, Pit Building on -Z right)
+  [0.08, 0.018, 0.234, 0.0, 1],
+  [-0.12, 0.018, 0.234, 0.0, 1],
+  [-0.31, 0.019, 0.232, 2.0, 1],
+
+  // Sector 2: Turn 1–2 Uphill Braking Complex
+  [-0.425, 0.024, 0.205, 11.0, 2],
+  [-0.465, 0.030, 0.125, 10.0, 2],
+  [-0.445, 0.034, 0.015, 6.0, 2],
+  [-0.435, 0.033, -0.095, 8.0, 2],
+  [-0.365, 0.030, -0.165, 9.0, 2],
+
+  // Sector 3: Long DRS Back Straight (under Overpass Bridge) & Turn 3 Heavy-Braking Hairpin
+  [-0.20, 0.026, -0.174, 0.0, 3],
+  [0.00, 0.024, -0.174, 0.0, 3],
+  [0.22, 0.023, -0.170, 2.0, 3],
+  [0.385, 0.024, -0.162, 12.0, 3],
+  [0.455, 0.025, -0.105, 14.0, 3],
+
+  // Sector 4: Flowing High-Speed Esses (Turns 4–9)
+  [0.380, 0.022, -0.048, 10.0, 4],
+  [0.225, 0.021, -0.055, -10.0, 4],
+  [0.165, 0.020, 0.008, -11.0, 4],
+  [0.265, 0.019, 0.055, 10.0, 4],
+
+  // Sector 5: Yeongsan Lake Marina & Harbor Complex (Turns 10–16)
+  [0.395, 0.019, 0.035, 9.0, 5],
+  [0.462, 0.019, 0.095, 11.0, 5],
+  [0.440, 0.018, 0.180, 10.0, 5],
+
+  // Sector 6: Pit Entry & Final Sweeper returning to Main Straight
+  [0.345, 0.018, 0.224, 6.0, 6],
+  [0.220, 0.018, 0.234, 1.0, 6],
+];
+
+/**
  * Returns the splineData object for the requested track ID.
- * @param {string} trackId - 'seoraksan', 'taean', 'hallasan', 'classic', 'gymkhana', 'infinity', or 'countryside'
+ * @param {string} trackId - 'yeongam', 'seoraksan', 'taean', 'hallasan', 'classic', 'gymkhana', 'infinity', or 'countryside'
  * @param {object} defaultClassicSpline - Pre-loaded track_spline.json if available
  */
 export function getTrackSplineData(trackId, defaultClassicSpline = null) {
@@ -513,6 +583,12 @@ export function getTrackSplineData(trackId, defaultClassicSpline = null) {
   }
 
   const def = TRACK_DEFINITIONS.find((t) => t.id === trackId) || TRACK_DEFINITIONS[0];
+
+  if (trackId === 'yeongam') {
+    const generated = buildSplineDataFromControlPoints(def, YEONGAM_CONTROL_POINTS, 0, 1);
+    splineCache.set('yeongam', generated);
+    return generated;
+  }
 
   if (trackId === 'seoraksan') {
     const generated = buildSplineDataFromControlPoints(def, SEORAKSAN_CONTROL_POINTS, 0, 1);

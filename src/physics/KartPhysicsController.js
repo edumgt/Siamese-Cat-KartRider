@@ -299,7 +299,7 @@ export async function createKartPhysicsController(splineData, manifest, roadGeo)
   };
 
   const state = {
-    s: sectorStartArcs[6], // Start on Sector 6 G915 Viaduct approaching Start/Finish gantry
+    s: (startFinishArc - 0.025 + totalLength) % totalLength, // Spawn right before active track's Start/Finish gantry
     lateralOffset: 0.0, // -0.0078m to +0.0078m across the 22mm roadbed
     lateralVel: 0.0,
     speed: 0.0, // Stationary (0.0 m/s) in Manual Mode at startup until player presses W/Up or P

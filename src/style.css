@@ -2397,20 +2397,24 @@ body {
 
 .track-cards-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 7px;
   margin-top: 4px;
+}
+
+.track-cards-grid > .track-select-card {
+  grid-column: span 2;
 }
 
 @media (max-width: 768px) {
   .track-cards-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-}
-
-@media (max-width: 520px) {
-  .track-cards-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .track-cards-grid > .track-select-card {
+    grid-column: span 1;
+  }
+  .track-cards-grid > .track-select-card-featured {
+    grid-column: span 2;
   }
 }
 
@@ -2519,6 +2523,12 @@ body {
   color: #fca5a5;
 }
 
+.tag-f1 {
+  background: linear-gradient(90deg, rgba(225, 6, 0, 0.34), rgba(225, 6, 0, 0.18));
+  border: 1px solid rgba(255, 68, 68, 0.85);
+  color: #ffe4e6;
+}
+
 .welcome-section-group {
   margin-bottom: 0;
 }
@@ -2608,16 +2618,21 @@ body {
   white-space: nowrap;
 }
 
-/* Featured MTB #1 Track Row spanning full 3 columns cleanly */
-.track-select-card-featured {
-  grid-column: 1 / -1;
+/* Featured Top-Row Circuits (Yeongam F1 GP + Seoraksan MTB #1) side-by-side (3 cols each) */
+.track-cards-grid > .track-select-card-featured {
+  grid-column: span 3;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: space-between;
-  gap: 10px;
-  padding: 7px 11px;
+  gap: 3px;
+  padding: 6px 10px;
   background: linear-gradient(125deg, rgba(239, 68, 68, 0.14) 0%, rgba(10, 16, 30, 0.82) 100%);
   border-color: rgba(239, 68, 68, 0.42);
+}
+
+.track-cards-grid > .track-select-card-f1 {
+  background: linear-gradient(125deg, rgba(225, 6, 0, 0.22) 0%, rgba(12, 18, 34, 0.88) 100%);
+  border-color: rgba(225, 6, 0, 0.56);
 }
 
 .track-select-card-featured:hover {
@@ -2625,23 +2640,23 @@ body {
 }
 
 .track-select-card-featured.active {
-  background: linear-gradient(125deg, rgba(239, 68, 68, 0.26) 0%, rgba(16, 20, 34, 0.94) 100%);
+  background: linear-gradient(125deg, rgba(239, 68, 68, 0.28) 0%, rgba(16, 20, 34, 0.94) 100%);
   border-color: #ef4444;
   box-shadow:
-    0 0 20px rgba(239, 68, 68, 0.35),
+    0 0 20px rgba(239, 68, 68, 0.38),
     0 8px 24px rgba(0, 0, 0, 0.90),
-    inset 0 0 12px rgba(239, 68, 68, 0.14);
+    inset 0 0 12px rgba(239, 68, 68, 0.16);
 }
 
 .track-featured-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
 .track-select-card-featured .track-card-stats {
-  margin-top: 0;
+  margin-top: 1px;
   flex-shrink: 0;
 }
 
